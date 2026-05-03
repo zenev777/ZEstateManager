@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ZEstate.Core/ZEstate.Core.csproj" />
+  <Project Path="ZEstate.Infrastructure/ZEstate.Infrastructure.csproj" />
+  <Project Path="ZEstateApi/ZEstateApi.csproj" />
+</Solution>

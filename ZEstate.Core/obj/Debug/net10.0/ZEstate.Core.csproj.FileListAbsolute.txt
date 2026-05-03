@@ -1,0 +1,11 @@
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\bin\Debug\net10.0\ZEstate.Core.deps.json
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\bin\Debug\net10.0\ZEstate.Core.dll
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\bin\Debug\net10.0\ZEstate.Core.pdb
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.AssemblyInfoInputs.cache
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.AssemblyInfo.cs
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.csproj.CoreCompileInputs.cache
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.dll
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\refint\ZEstate.Core.dll
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.pdb
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ref\ZEstate.Core.dll
