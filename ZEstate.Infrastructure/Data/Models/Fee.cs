@@ -14,18 +14,18 @@ namespace ZEstate.Infrastructure.Data.Models
     {
         [Key]
         [Comment("Fee identifier")]
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [Comment("Building identifier")]
-        public Guid BuildingId { get; set; }
+        public int BuildingId { get; set; }
 
         [Required]
         [ForeignKey(nameof(BuildingId))]
         public Building Building { get; set; } = null!;
 
         [Comment("Repair identifier, if fee is related to a repair")]
-        public Guid? RepairId { get; set; }
+        public int? RepairId { get; set; }
 
         [ForeignKey(nameof(RepairId))]
         public Repair? Repair { get; set; }

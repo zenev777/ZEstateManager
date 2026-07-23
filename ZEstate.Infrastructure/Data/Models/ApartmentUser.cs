@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 using ZEstate.Infrastructure.Data.Enums;
+using ZEstate.Infrastructure.Data.IdentityModels;
 
 namespace ZEstate.Infrastructure.Data.Models
 {
@@ -12,7 +13,7 @@ namespace ZEstate.Infrastructure.Data.Models
     {
         [Required]
         [Comment("Apartment identifier")]
-        public Guid ApartmentId { get; set; }
+        public int ApartmentId { get; set; }
 
         [Required]
         [ForeignKey(nameof(ApartmentId))]
@@ -20,11 +21,11 @@ namespace ZEstate.Infrastructure.Data.Models
 
         [Required]
         [Comment("User identifier")]
-        public Guid UserId { get; set; }
+        public string UserId { get; set; }
 
         [Required]
         [ForeignKey(nameof(UserId))]
-        public User User { get; set; } = null!;
+        public ApplicationUser User { get; set; } = null!;
 
         [Required]
         [Comment("Role of the user in this apartment")]

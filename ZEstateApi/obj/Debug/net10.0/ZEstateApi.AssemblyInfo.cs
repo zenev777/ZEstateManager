@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ZEstateApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+65f5433332e52f5d9d0902bf6bf1f0f03f5519cd")]
 [assembly: System.Reflection.AssemblyProductAttribute("ZEstateApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ZEstateApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

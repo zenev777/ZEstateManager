@@ -12,7 +12,7 @@ namespace ZEstate.Infrastructure.Data.Models
     {
         [Key]
         [Comment("Building identifier")]
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [MaxLength(NameMaxLength)]
@@ -27,6 +27,11 @@ namespace ZEstate.Infrastructure.Data.Models
         [Required]
         [Comment("Date when the building was added to the system")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [Required]
+        [MaxLength(10)]
+        [Comment("Unique invite code for residents to join")]
+        public string InviteCode { get; set; } = string.Empty;
 
         public ICollection<Apartment> Apartments { get; set; } = new List<Apartment>();
         public ICollection<Fee> Fees { get; set; } = new List<Fee>();

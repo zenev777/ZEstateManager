@@ -14,5 +14,7 @@ namespace ZEstate.Infrastructure.Data.IdentityModels
 
         [StringLength(UserNamesMaxLenght)]
         public string? LastName { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 }

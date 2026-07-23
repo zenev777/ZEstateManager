@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ZEstate.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialMigration : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -57,42 +57,16 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Buildings",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Building identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Building identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, comment: "Building name"),
                     Address = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, comment: "Building address"),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date when the building was added to the system")
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date when the building was added to the system"),
+                    InviteCode = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false, comment: "Unique invite code for residents to join")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Buildings", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "User",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false, comment: "Full name of the user"),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date when the user registered"),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false, comment: "Whether the user account is active"),
-                    UserName = table.Column<string>(type: "text", nullable: true),
-                    NormalizedUserName = table.Column<string>(type: "text", nullable: true),
-                    Email = table.Column<string>(type: "text", nullable: true),
-                    NormalizedEmail = table.Column<string>(type: "text", nullable: true),
-                    EmailConfirmed = table.Column<bool>(type: "boolean", nullable: false),
-                    PasswordHash = table.Column<string>(type: "text", nullable: true),
-                    SecurityStamp = table.Column<string>(type: "text", nullable: true),
-                    ConcurrencyStamp = table.Column<string>(type: "text", nullable: true),
-                    PhoneNumber = table.Column<string>(type: "text", nullable: true),
-                    PhoneNumberConfirmed = table.Column<bool>(type: "boolean", nullable: false),
-                    TwoFactorEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    LockoutEnd = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LockoutEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    AccessFailedCount = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_User", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -205,8 +179,9 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Apartments",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Apartment identifier"),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Building identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Apartment identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    BuildingId = table.Column<int>(type: "integer", nullable: false, comment: "Building identifier"),
                     Number = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false, comment: "Apartment number"),
                     Floor = table.Column<int>(type: "integer", nullable: false, comment: "Floor number"),
                     IdealParts = table.Column<decimal>(type: "numeric", nullable: false, comment: "Ideal parts percentage of the building"),
@@ -227,8 +202,9 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Meetings",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Meeting identifier"),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Building identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Meeting identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    BuildingId = table.Column<int>(type: "integer", nullable: false, comment: "Building identifier"),
                     Title = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false, comment: "Meeting title"),
                     Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, comment: "Meeting description"),
                     StartDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Meeting start date and time"),
@@ -251,8 +227,9 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Repairs",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Repair identifier"),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Building identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Repair identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    BuildingId = table.Column<int>(type: "integer", nullable: false, comment: "Building identifier"),
                     Title = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false, comment: "Repair title"),
                     Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, comment: "Repair description"),
                     Budget = table.Column<decimal>(type: "numeric", nullable: false, comment: "Repair budget"),
@@ -274,8 +251,8 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "ApartmentUsers",
                 columns: table => new
                 {
-                    ApartmentId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Apartment identifier"),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false, comment: "User identifier"),
+                    ApartmentId = table.Column<int>(type: "integer", nullable: false, comment: "Apartment identifier"),
+                    UserId = table.Column<string>(type: "text", nullable: false, comment: "User identifier"),
                     Role = table.Column<int>(type: "integer", nullable: false, comment: "Role of the user in this apartment"),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false, comment: "Whether the user is currently active in this apartment"),
                     JoinedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date when the user joined the apartment")
@@ -290,9 +267,9 @@ namespace ZEstate.Infrastructure.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_ApartmentUsers_User_UserId",
+                        name: "FK_ApartmentUsers_AspNetUsers_UserId",
                         column: x => x.UserId,
-                        principalTable: "User",
+                        principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -301,9 +278,10 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Votes",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Vote identifier"),
-                    MeetingId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Meeting identifier"),
-                    UserId = table.Column<Guid>(type: "uuid", nullable: false, comment: "User identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Vote identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    MeetingId = table.Column<int>(type: "integer", nullable: false, comment: "Meeting identifier"),
+                    UserId = table.Column<string>(type: "text", nullable: false, comment: "User identifier"),
                     Value = table.Column<int>(type: "integer", nullable: false, comment: "Vote value: Yes, No or Abstain"),
                     VotedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date and time when the vote was cast")
                 },
@@ -311,15 +289,15 @@ namespace ZEstate.Infrastructure.Migrations
                 {
                     table.PrimaryKey("PK_Votes", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Votes_Meetings_MeetingId",
-                        column: x => x.MeetingId,
-                        principalTable: "Meetings",
+                        name: "FK_Votes_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_Votes_User_UserId",
-                        column: x => x.UserId,
-                        principalTable: "User",
+                        name: "FK_Votes_Meetings_MeetingId",
+                        column: x => x.MeetingId,
+                        principalTable: "Meetings",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -328,9 +306,10 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Documents",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Document identifier"),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Building identifier"),
-                    RepairId = table.Column<Guid>(type: "uuid", nullable: true, comment: "Repair identifier, if document belongs to a repair"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Document identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    BuildingId = table.Column<int>(type: "integer", nullable: false, comment: "Building identifier"),
+                    RepairId = table.Column<int>(type: "integer", nullable: true, comment: "Repair identifier, if document belongs to a repair"),
                     FilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, comment: "File storage path"),
                     FileName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, comment: "Original file name"),
                     Type = table.Column<int>(type: "integer", nullable: false, comment: "Document type: Protocol, Contract, Invoice or Other"),
@@ -357,9 +336,10 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Fees",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Fee identifier"),
-                    BuildingId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Building identifier"),
-                    RepairId = table.Column<Guid>(type: "uuid", nullable: true, comment: "Repair identifier, if fee is related to a repair"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Fee identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    BuildingId = table.Column<int>(type: "integer", nullable: false, comment: "Building identifier"),
+                    RepairId = table.Column<int>(type: "integer", nullable: true, comment: "Repair identifier, if fee is related to a repair"),
                     Title = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false, comment: "Fee title"),
                     Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, comment: "Fee description"),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false, comment: "Fee amount"),
@@ -389,9 +369,10 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Obligations",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Obligation identifier"),
-                    ApartmentId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Apartment identifier"),
-                    FeeId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Fee identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Obligation identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ApartmentId = table.Column<int>(type: "integer", nullable: false, comment: "Apartment identifier"),
+                    FeeId = table.Column<int>(type: "integer", nullable: false, comment: "Fee identifier"),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false, comment: "Amount due"),
                     Status = table.Column<int>(type: "integer", nullable: false, comment: "Current payment status"),
                     DateCreated = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date when the obligation was created"),
@@ -418,8 +399,9 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "Payments",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false, comment: "Payment identifier"),
-                    ObligationId = table.Column<Guid>(type: "uuid", nullable: false, comment: "Obligation identifier"),
+                    Id = table.Column<int>(type: "integer", nullable: false, comment: "Payment identifier")
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ObligationId = table.Column<int>(type: "integer", nullable: false, comment: "Obligation identifier"),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false, comment: "Amount paid"),
                     PaidAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, comment: "Date and time of payment"),
                     Method = table.Column<int>(type: "integer", nullable: false, comment: "Payment method used"),
@@ -573,16 +555,13 @@ namespace ZEstate.Infrastructure.Migrations
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
-                name: "AspNetUsers");
-
-            migrationBuilder.DropTable(
                 name: "Obligations");
 
             migrationBuilder.DropTable(
-                name: "Meetings");
+                name: "AspNetUsers");
 
             migrationBuilder.DropTable(
-                name: "User");
+                name: "Meetings");
 
             migrationBuilder.DropTable(
                 name: "Apartments");

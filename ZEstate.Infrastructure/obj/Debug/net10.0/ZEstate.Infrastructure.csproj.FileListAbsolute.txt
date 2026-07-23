@@ -13,3 +13,4 @@ C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\Z
 C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Infrastructure\obj\Debug\net10.0\refint\ZEstate.Infrastructure.dll
 C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Infrastructure\obj\Debug\net10.0\ZEstate.Infrastructure.pdb
 C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Infrastructure\obj\Debug\net10.0\ref\ZEstate.Infrastructure.dll
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Infrastructure\obj\Debug\net10.0\ZEstate.Infrastructure.sourcelink.json

@@ -13,11 +13,11 @@ namespace ZEstate.Infrastructure.Data.Models
     {
         [Key]
         [Comment("Payment identifier")]
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [Comment("Obligation identifier")]
-        public Guid ObligationId { get; set; }
+        public int ObligationId { get; set; }
 
         [Required]
         [ForeignKey(nameof(ObligationId))]

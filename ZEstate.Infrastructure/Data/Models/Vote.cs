@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 using ZEstate.Infrastructure.Data.Enums;
+using ZEstate.Infrastructure.Data.IdentityModels;
 
 namespace ZEstate.Infrastructure.Data.Models
 {
@@ -12,11 +13,11 @@ namespace ZEstate.Infrastructure.Data.Models
     {
         [Key]
         [Comment("Vote identifier")]
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [Comment("Meeting identifier")]
-        public Guid MeetingId { get; set; }
+        public int MeetingId { get; set; }
 
         [Required]
         [ForeignKey(nameof(MeetingId))]
@@ -24,11 +25,11 @@ namespace ZEstate.Infrastructure.Data.Models
 
         [Required]
         [Comment("User identifier")]
-        public Guid UserId { get; set; }
+        public string UserId { get; set; }
 
         [Required]
         [ForeignKey(nameof(UserId))]
-        public User User { get; set; } = null!;
+        public ApplicationUser User { get; set; } = null!;
 
         [Required]
         [Comment("Vote value: Yes, No or Abstain")]

@@ -9,3 +9,4 @@ C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\Z
 C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\refint\ZEstate.Core.dll
 C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.pdb
 C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ref\ZEstate.Core.dll
+C:\Users\ZHAN\OneDrive - Software University (SoftUni)\Desktop\ZEstate Manager\ZEstateManager\ZEstate.Core\obj\Debug\net10.0\ZEstate.Core.sourcelink.json

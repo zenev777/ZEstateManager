@@ -65,4 +65,10 @@ namespace ZEstate.Infrastructure.Data.Enums
         All,
         ManagerOnly
     }
+    public enum JoinRequestStatus
+    {
+        Pending,
+        Approved,
+        Rejected
+    }
 }

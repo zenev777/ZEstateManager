@@ -13,11 +13,11 @@ namespace ZEstate.Infrastructure.Data.Models
     {
         [Key]
         [Comment("Obligation identifier")]
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [Comment("Apartment identifier")]
-        public Guid ApartmentId { get; set; }
+        public int ApartmentId { get; set; }
 
         [Required]
         [ForeignKey(nameof(ApartmentId))]
@@ -25,7 +25,7 @@ namespace ZEstate.Infrastructure.Data.Models
 
         [Required]
         [Comment("Fee identifier")]
-        public Guid FeeId { get; set; }
+        public int FeeId { get; set; }
 
         [Required]
         [ForeignKey(nameof(FeeId))]

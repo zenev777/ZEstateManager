@@ -16,11 +16,11 @@ namespace ZEstate.Infrastructure.Data.Models
 
         [Key]
         [Comment("Meeting identifier")]
-        public Guid Id { get; set; }
+        public int Id { get; set; }
 
         [Required]
         [Comment("Building identifier")]
-        public Guid BuildingId { get; set; }
+        public int BuildingId { get; set; }
 
         [Required]
         [ForeignKey(nameof(BuildingId))]

@@ -228,17 +228,19 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Apartment", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Apartment identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Budget")
                         .HasColumnType("numeric")
                         .HasComment("Apartment budget balance");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("integer")
                         .HasComment("Building identifier");
 
                     b.Property<int>("Floor")
@@ -264,12 +266,12 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.ApartmentUser", b =>
                 {
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
+                    b.Property<string>("UserId")
+                        .HasColumnType("text")
                         .HasComment("User identifier");
 
-                    b.Property<Guid>("ApartmentId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("ApartmentId")
+                        .HasColumnType("integer")
                         .HasComment("Apartment identifier");
 
                     b.Property<bool>("IsActive")
@@ -293,10 +295,12 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Building", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Building identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Address")
                         .IsRequired()
@@ -307,6 +311,12 @@ namespace ZEstate.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasComment("Date when the building was added to the system");
+
+                    b.Property<string>("InviteCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasComment("Unique invite code for residents to join");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -321,17 +331,19 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Document", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Document identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<int>("Access")
                         .HasColumnType("integer")
                         .HasComment("Access level: All or ManagerOnly");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("integer")
                         .HasComment("Building identifier");
 
                     b.Property<string>("FileName")
@@ -346,8 +358,8 @@ namespace ZEstate.Infrastructure.Migrations
                         .HasColumnType("character varying(500)")
                         .HasComment("File storage path");
 
-                    b.Property<Guid?>("RepairId")
-                        .HasColumnType("uuid")
+                    b.Property<int?>("RepairId")
+                        .HasColumnType("integer")
                         .HasComment("Repair identifier, if document belongs to a repair");
 
                     b.Property<int>("Type")
@@ -369,17 +381,19 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Fee", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Fee identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric")
                         .HasComment("Fee amount");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("integer")
                         .HasComment("Building identifier");
 
                     b.Property<DateTime>("CreatedAt")
@@ -403,8 +417,8 @@ namespace ZEstate.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasComment("Fee priority");
 
-                    b.Property<Guid?>("RepairId")
-                        .HasColumnType("uuid")
+                    b.Property<int?>("RepairId")
+                        .HasColumnType("integer")
                         .HasComment("Repair identifier, if fee is related to a repair");
 
                     b.Property<string>("Title")
@@ -428,13 +442,15 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Meeting", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Meeting identifier");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("integer")
                         .HasComment("Building identifier");
 
                     b.Property<string>("Description")
@@ -474,17 +490,19 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Obligation", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Obligation identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric")
                         .HasComment("Amount due");
 
-                    b.Property<Guid>("ApartmentId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("ApartmentId")
+                        .HasColumnType("integer")
                         .HasComment("Apartment identifier");
 
                     b.Property<DateTime>("DateCreated")
@@ -495,8 +513,8 @@ namespace ZEstate.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasComment("Due date for the obligation");
 
-                    b.Property<Guid>("FeeId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("FeeId")
+                        .HasColumnType("integer")
                         .HasComment("Fee identifier");
 
                     b.Property<int>("Status")
@@ -514,10 +532,12 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Payment", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Payment identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric")
@@ -527,8 +547,8 @@ namespace ZEstate.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasComment("Payment method used");
 
-                    b.Property<Guid>("ObligationId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("ObligationId")
+                        .HasColumnType("integer")
                         .HasComment("Obligation identifier");
 
                     b.Property<DateTime>("PaidAt")
@@ -549,17 +569,19 @@ namespace ZEstate.Infrastructure.Migrations
 
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Repair", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Repair identifier");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<decimal>("Budget")
                         .HasColumnType("numeric")
                         .HasComment("Repair budget");
 
-                    b.Property<Guid>("BuildingId")
-                        .HasColumnType("uuid")
+                    b.Property<int>("BuildingId")
+                        .HasColumnType("integer")
                         .HasComment("Building identifier");
 
                     b.Property<DateTime>("CreatedAt")
@@ -588,86 +610,22 @@ namespace ZEstate.Infrastructure.Migrations
                     b.ToTable("Repairs");
                 });
 
-            modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.User", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ConcurrencyStamp")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasComment("Date when the user registered");
-
-                    b.Property<string>("Email")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasComment("Whether the user account is active");
-
-                    b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasComment("Full name of the user");
-
-                    b.Property<string>("NormalizedEmail")
-                        .HasColumnType("text");
-
-                    b.Property<string>("NormalizedUserName")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PasswordHash")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("SecurityStamp")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("UserName")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("User");
-                });
-
             modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.Vote", b =>
                 {
-                    b.Property<Guid>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
+                        .HasColumnType("integer")
                         .HasComment("Vote identifier");
 
-                    b.Property<Guid>("MeetingId")
-                        .HasColumnType("uuid")
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MeetingId")
+                        .HasColumnType("integer")
                         .HasComment("Meeting identifier");
 
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text")
                         .HasComment("User identifier");
 
                     b.Property<int>("Value")
@@ -757,8 +715,8 @@ namespace ZEstate.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ZEstate.Infrastructure.Data.Models.User", "User")
-                        .WithMany("ApartmentUsers")
+                    b.HasOne("ZEstate.Infrastructure.Data.IdentityModels.ApplicationUser", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -862,8 +820,8 @@ namespace ZEstate.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("ZEstate.Infrastructure.Data.Models.User", "User")
-                        .WithMany("Votes")
+                    b.HasOne("ZEstate.Infrastructure.Data.IdentityModels.ApplicationUser", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -913,13 +871,6 @@ namespace ZEstate.Infrastructure.Migrations
                     b.Navigation("Documents");
 
                     b.Navigation("Fees");
-                });
-
-            modelBuilder.Entity("ZEstate.Infrastructure.Data.Models.User", b =>
-                {
-                    b.Navigation("ApartmentUsers");
-
-                    b.Navigation("Votes");
                 });
 #pragma warning restore 612, 618
         }
