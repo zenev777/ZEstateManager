@@ -2,8 +2,10 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection.Metadata;
 using System.Text;
+using ZEstate.Infrastructure.Data.IdentityModels;
 using static ZEstate.Infrastructure.Data.DataConstants.DataConstants;
 
 namespace ZEstate.Infrastructure.Data.Models
@@ -32,6 +34,12 @@ namespace ZEstate.Infrastructure.Data.Models
         [MaxLength(10)]
         [Comment("Unique invite code for residents to join")]
         public string InviteCode { get; set; } = string.Empty;
+
+        [Comment("The house manager responsible for this building")]
+        public string? ManagerId { get; set; }
+
+        [ForeignKey(nameof(ManagerId))]
+        public ApplicationUser? Manager { get; set; }
 
         public ICollection<Apartment> Apartments { get; set; } = new List<Apartment>();
         public ICollection<Fee> Fees { get; set; } = new List<Fee>();

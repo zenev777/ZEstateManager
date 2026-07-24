@@ -22,6 +22,7 @@ namespace ZEstate.Infrastructure
         public DbSet<Building> Buildings { get; set; }
         public DbSet<Apartment> Apartments { get; set; }
         public DbSet<ApartmentUser> ApartmentUsers { get; set; }
+        public DbSet<JoinRequest> JoinRequests { get; set; }
         public DbSet<Fee> Fees { get; set; }
         public DbSet<Meeting> Meetings { get; set; }
         public DbSet<Obligation> Obligations { get; set; }

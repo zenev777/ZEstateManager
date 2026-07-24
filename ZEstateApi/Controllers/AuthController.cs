@@ -1,6 +1,9 @@
-﻿// AuthController.cs
+// AuthController.cs
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using ZEstate.Core.DTOs.Auth;
@@ -44,6 +47,19 @@ public class AuthController : ControllerBase
         if (dto.Role == "Resident" && dto.JoinBuilding == null)
             return BadRequest(new { message = "Живущият трябва да въведе код за сграда." });
 
+        Building? joinTargetBuilding = null;
+        if (dto.Role == "Resident" && dto.JoinBuilding != null)
+        {
+            joinTargetBuilding = await _context.Buildings
+                .FirstOrDefaultAsync(b => b.InviteCode == dto.JoinBuilding.InviteCode);
+
+            if (joinTargetBuilding == null)
+                return BadRequest(new { message = "Невалиден код за сграда." });
+
+            if (!Enum.TryParse<ApartmentRole>(dto.JoinBuilding.Status, true, out _))
+                return BadRequest(new { message = "Невалиден статут." });
+        }
+
         // Създаване на потребителя
         var user = new ApplicationUser
         {
@@ -51,6 +67,7 @@ public class AuthController : ControllerBase
             LastName = dto.LastName,
             Email = dto.Email,
             UserName = dto.Email,
+            PhoneNumber = dto.PhoneNumber,
             CreatedAt = DateTime.UtcNow,
             IsActive = true,
         };
@@ -61,7 +78,9 @@ public class AuthController : ControllerBase
 
         await _userManager.AddToRoleAsync(user, dto.Role);
 
-        // Сценарий 1: Домоуправител → създава сграда + апартаменти
+        string? buildingInviteCode = null;
+
+        // Сценарий 1: Домоуправител → създава сграда (+ евентуално собствен апартамент)
         if (dto.Role == "HouseManager" && dto.Building != null)
         {
             var building = new Building
@@ -69,57 +88,71 @@ public class AuthController : ControllerBase
                 Name = dto.Building.Name,
                 Address = dto.Building.Address,
                 InviteCode = GenerateInviteCode(),
+                ManagerId = user.Id,
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Buildings.Add(building);
             await _context.SaveChangesAsync();
 
-            // Автоматично генериране на апартаменти
-            //for (int i = 1; i <= dto.Building.ApartmentsCount; i++)
-            //{
-            //    _context.Apartments.Add(new Apartment
-            //    {
-            //        BuildingId = building.Id,
-            //        Number = i.ToString(),
-            //        Floor = (int)Math.Ceiling((double)i / (dto.Building.ApartmentsCount / dto.Building.FloorsCount)),
-            //        IdealParts = Math.Round(100m / dto.Building.ApartmentsCount, 2),
-            //        Budget = 0
-            //    });
-            //}
-
-            // Свързваме домоуправителя към сградата
-            _context.ApartmentUsers.Add(new ApartmentUser
+            if (dto.Building.LivesInBuilding && !string.IsNullOrWhiteSpace(dto.Building.ApartmentNumber))
             {
-                UserId = user.Id,
-                BuildingId = building.Id,
-                Role = ApartmentRole.HouseManager
-            });
+                var apartment = new Apartment
+                {
+                    BuildingId = building.Id,
+                    Number = dto.Building.ApartmentNumber,
+                    Floor = dto.Building.Floor ?? 0,
+                    IdealParts = 0,
+                    Budget = 0
+                };
 
-            await _context.SaveChangesAsync();
+                _context.Apartments.Add(apartment);
+                await _context.SaveChangesAsync();
+
+                _context.ApartmentUsers.Add(new ApartmentUser
+                {
+                    ApartmentId = apartment.Id,
+                    UserId = user.Id,
+                    Role = ApartmentRole.HouseManager
+                });
+
+                await _context.SaveChangesAsync();
+            }
+
+            buildingInviteCode = building.InviteCode;
         }
 
-        // Сценарий 2: Живущ → проверява кода и изпраща заявка
-        if (dto.Role == "Resident" && dto.JoinBuilding != null)
+        // Сценарий 2: Живущ → проверява кода и изпраща заявка за присъединяване
+        if (dto.Role == "Resident" && dto.JoinBuilding != null && joinTargetBuilding != null)
         {
-            var building = await _context.Buildings
-                .FirstOrDefaultAsync(b => b.InviteCode == dto.JoinBuilding.InviteCode);
+            var apartment = await _context.Apartments
+                .FirstOrDefaultAsync(a => a.BuildingId == joinTargetBuilding.Id
+                                        && a.Number == dto.JoinBuilding.ApartmentNumber);
 
-            if (building == null)
-                return BadRequest(new { message = "Невалиден код за сграда." });
+            if (apartment == null)
+            {
+                apartment = new Apartment
+                {
+                    BuildingId = joinTargetBuilding.Id,
+                    Number = dto.JoinBuilding.ApartmentNumber,
+                    Floor = 0,
+                    IdealParts = 0,
+                    Budget = 0
+                };
 
-            //var apartment = await _context.Apartments
-            //    .FirstOrDefaultAsync(a => a.Id == dto.JoinBuilding.ApartmentId
-            //                           && a.BuildingId == building.Id);
+                _context.Apartments.Add(apartment);
+                await _context.SaveChangesAsync();
+            }
 
-            //if (apartment == null)
-            //    return BadRequest(new { message = "Апартаментът не е намерен." });
+            Enum.TryParse<ApartmentRole>(dto.JoinBuilding.Status, true, out var requestedRole);
 
             _context.JoinRequests.Add(new JoinRequest
             {
                 UserId = user.Id,
-                BuildingId = building.Id,
+                BuildingId = joinTargetBuilding.Id,
                 ApartmentId = apartment.Id,
+                RequestedRole = requestedRole,
+                Notes = dto.JoinBuilding.Notes,
                 Status = JoinRequestStatus.Pending,
                 CreatedAt = DateTime.UtcNow
             });
@@ -134,16 +167,16 @@ public class AuthController : ControllerBase
             Token = token,
             Email = user.Email!,
             Name = user.Name,
-            Roles = await _userManager.GetRolesAsync(user)
+            Roles = await _userManager.GetRolesAsync(user),
+            BuildingInviteCode = buildingInviteCode
         });
     }
 
-    // GET: Апартаменти по код на сграда (за живущите)
+    // GET: Информация за сграда по код (за живущите, преди регистрация)
     [HttpGet("building-by-code/{code}")]
     public async Task<IActionResult> GetBuildingByCode(string code)
     {
         var building = await _context.Buildings
-            .Include(b => b.Apartments)
             .FirstOrDefaultAsync(b => b.InviteCode == code);
 
         if (building == null)
@@ -154,12 +187,7 @@ public class AuthController : ControllerBase
             building.Id,
             building.Name,
             building.Address,
-            Apartments = building.Apartments.Select(a => new
-            {
-                a.Id,
-                a.Number,
-                a.Floor
-            }).OrderBy(a => a.Floor).ThenBy(a => a.Number)
+            building.InviteCode
         });
     }
 

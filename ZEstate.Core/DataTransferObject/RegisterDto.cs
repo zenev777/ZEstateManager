@@ -1,4 +1,4 @@
-﻿// RegisterDto.cs
+// RegisterDto.cs
 using System.ComponentModel.DataAnnotations;
 
 namespace ZEstate.Core.DTOs.Auth;
@@ -16,6 +16,9 @@ public class RegisterDto
     [Required]
     [EmailAddress]
     public string Email { get; set; } = string.Empty;
+
+    [Phone]
+    public string? PhoneNumber { get; set; }
 
     [Required]
     [MinLength(6)]
@@ -46,12 +49,13 @@ public class CreateBuildingDto
     public string Address { get; set; } = string.Empty;
 
     [Required]
-    [Range(1, 50)]
-    public int FloorsCount { get; set; }
+    public bool LivesInBuilding { get; set; }
 
-    [Required]
-    [Range(1, 500)]
-    public int ApartmentsCount { get; set; }
+    // Попълва се само ако LivesInBuilding == true
+    [MaxLength(10)]
+    public string? ApartmentNumber { get; set; }
+
+    public int? Floor { get; set; }
 }
 
 public class JoinBuildingDto
@@ -61,5 +65,12 @@ public class JoinBuildingDto
     public string InviteCode { get; set; } = string.Empty;
 
     [Required]
-    public int ApartmentId { get; set; }
+    [MaxLength(10)]
+    public string ApartmentNumber { get; set; } = string.Empty;
+
+    [Required]
+    public string Status { get; set; } = "Resident"; // "Owner" | "Resident" (наемател)
+
+    [MaxLength(300)]
+    public string? Notes { get; set; }
 }

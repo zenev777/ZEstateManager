@@ -24,7 +24,7 @@ public class JoinRequest
 
     [Required]
     [Comment("User identifier")]
-    public int UserId { get; set; }
+    public string UserId { get; set; } = string.Empty;
 
     [Required]
     [ForeignKey(nameof(UserId))]
@@ -41,6 +41,10 @@ public class JoinRequest
     [Required]
     [Comment("Current status of the join request")]
     public JoinRequestStatus Status { get; set; } = JoinRequestStatus.Pending;
+
+    [Required]
+    [Comment("Role the user requested when joining (owner or resident/tenant)")]
+    public ApartmentRole RequestedRole { get; set; } = ApartmentRole.Resident;
 
     [MaxLength(NotesMaxLength)]
     [Comment("Optional note from the user")]
