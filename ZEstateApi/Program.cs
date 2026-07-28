@@ -12,6 +12,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 const string AngularClientCorsPolicy = "AngularClient";
 
+// Render (and most PaaS hosts) inject the port to bind to via $PORT.
+var renderPort = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(renderPort))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{renderPort}");
+}
+
 // Add services to the container.
 
 builder.Services.AddControllers();
@@ -57,11 +64,15 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// "Cors:AllowedOrigins" in appsettings/env vars, falling back to the local dev server.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? ["http://localhost:4200"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(AngularClientCorsPolicy, policy =>
     {
-        policy.WithOrigins("http://localhost:4200")
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -86,7 +97,12 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Render terminates TLS at its edge and forwards plain HTTP, so redirecting
+// to HTTPS inside the container would loop forever — only redirect locally.
+if (string.IsNullOrEmpty(renderPort))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors(AngularClientCorsPolicy);
 
