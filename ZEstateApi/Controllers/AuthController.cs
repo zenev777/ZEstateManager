@@ -1,4 +1,5 @@
 // AuthController.cs
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -210,6 +211,100 @@ public class AuthController : ControllerBase
             building.Address,
             building.InviteCode
         });
+    }
+
+    // GET: Статус на текущия потребител — за резидента показва статуса на заявката му
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> Me()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var isManager = User.IsInRole("HouseManager");
+
+        if (isManager)
+            return Ok(new { role = "HouseManager" });
+
+        var joinRequests = await _context.JoinRequests
+            .Where(jr => jr.UserId == userId)
+            .Include(jr => jr.Building)
+            .Include(jr => jr.Apartment)
+            .OrderByDescending(jr => jr.CreatedAt)
+            .ToListAsync();
+
+        var latest = joinRequests.FirstOrDefault();
+        if (latest == null)
+            return Ok(new { role = "Resident", membershipStatus = "None" });
+
+        var canRetry = latest.Status == JoinRequestStatus.Rejected && joinRequests.Count < 2;
+
+        return Ok(new
+        {
+            role = "Resident",
+            membershipStatus = latest.Status.ToString(),
+            buildingName = latest.Building.Name,
+            apartmentNumber = latest.Apartment.Number,
+            canRetry
+        });
+    }
+
+    // POST: Единствен позволен повторен опит за живущ, чиято заявка е отхвърлена
+    [HttpPost("resubmit-join-request")]
+    [Authorize(Roles = "Resident")]
+    public async Task<IActionResult> ResubmitJoinRequest([FromBody] JoinBuildingDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+
+        var existingRequests = await _context.JoinRequests
+            .Where(jr => jr.UserId == userId)
+            .ToListAsync();
+
+        var latest = existingRequests.OrderByDescending(jr => jr.CreatedAt).FirstOrDefault();
+        if (latest == null || latest.Status != JoinRequestStatus.Rejected || existingRequests.Count >= 2)
+            return BadRequest(new { message = "Няма възможност за нова заявка." });
+
+        var building = await _context.Buildings
+            .FirstOrDefaultAsync(b => b.InviteCode == dto.InviteCode);
+
+        if (building == null)
+            return BadRequest(new { message = "Невалиден код за сграда." });
+
+        if (!Enum.TryParse<ApartmentRole>(dto.Status, true, out var requestedRole))
+            return BadRequest(new { message = "Невалиден статут." });
+
+        var apartment = await _context.Apartments
+            .FirstOrDefaultAsync(a => a.BuildingId == building.Id && a.Number == dto.ApartmentNumber);
+
+        if (apartment == null)
+        {
+            apartment = new Apartment
+            {
+                BuildingId = building.Id,
+                Number = dto.ApartmentNumber,
+                Floor = 0,
+                IdealParts = 0,
+                Budget = 0
+            };
+
+            _context.Apartments.Add(apartment);
+            await _context.SaveChangesAsync();
+        }
+
+        _context.JoinRequests.Add(new JoinRequest
+        {
+            UserId = userId,
+            BuildingId = building.Id,
+            ApartmentId = apartment.Id,
+            RequestedRole = requestedRole,
+            Notes = dto.Notes,
+            Status = JoinRequestStatus.Pending,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Заявката е изпратена отново." });
     }
 
     private static string GenerateInviteCode()
