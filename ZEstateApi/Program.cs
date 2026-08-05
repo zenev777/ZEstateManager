@@ -5,8 +5,10 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ZEstate.Core.Interfaces;
 using ZEstate.Infrastructure;
+using ZEstate.Infrastructure.Data.DataConstants;
 using ZEstate.Infrastructure.Data.IdentityModels;
 using ZEstate.Infrastructure.Data.Repository;
+using ZEstateApi.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,7 +64,7 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options => options.AddZEstatePolicies());
 
 // "Cors:AllowedOrigins" in appsettings/env vars, falling back to the local dev server.
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -84,7 +86,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<ApplicationRole>>();
-    foreach (var roleName in new[] { "HouseManager", "Resident" })
+    foreach (var roleName in RoleNames.All)
     {
         if (!await roleManager.RoleExistsAsync(roleName))
             await roleManager.CreateAsync(new ApplicationRole { Name = roleName });
