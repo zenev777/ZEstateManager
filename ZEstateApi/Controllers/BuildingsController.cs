@@ -7,10 +7,11 @@ using ZEstate.Core.DTOs.Buildings;
 using ZEstate.Infrastructure;
 using ZEstate.Infrastructure.Data.Enums;
 using ZEstate.Infrastructure.Data.Models;
+using ZEstateApi.Authorization;
 
 [ApiController]
 [Route("api/buildings")]
-[Authorize(Roles = "HouseManager")]
+[Authorize(Policy = PolicyNames.BuildingManagement)]
 public class BuildingsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
