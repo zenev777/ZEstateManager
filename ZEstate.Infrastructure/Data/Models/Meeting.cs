@@ -61,6 +61,6 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("Current meeting status")]
         public MeetingStatus Status { get; set; } = MeetingStatus.Upcoming;
 
-        public ICollection<Vote> Votes { get; set; } = new List<Vote>();
+        public ICollection<VoteQuestion> VoteQuestions { get; set; } = new List<VoteQuestion>();
     }
 }
