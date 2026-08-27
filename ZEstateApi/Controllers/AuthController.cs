@@ -1,38 +1,19 @@
 // AuthController.cs
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using ZEstate.Core.DTOs.Auth;
 using ZEstate.Core.Interfaces;
-using ZEstate.Infrastructure;
-using ZEstate.Infrastructure.Data.Enums;
-using ZEstate.Infrastructure.Data.IdentityModels;
-using ZEstate.Infrastructure.Data.Models;
 
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly IConfiguration _configuration;
-    private readonly ApplicationDbContext _context;
-    private readonly IEmailSender _emailSender;
+    private readonly IAuthService _authService;
 
-    public AuthController(
-        UserManager<ApplicationUser> userManager,
-        IConfiguration configuration,
-        ApplicationDbContext context,
-        IEmailSender emailSender)
+    public AuthController(IAuthService authService)
     {
-        _userManager = userManager;
-        _configuration = configuration;
-        _context = context;
-        _emailSender = emailSender;
+        _authService = authService;
     }
 
     [HttpPost("login")]
@@ -41,19 +22,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var user = await _userManager.FindByEmailAsync(dto.Email);
-        if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Password))
-            return Unauthorized(new { message = "Грешен имейл или парола." });
-
-        var token = await GenerateJwtToken(user);
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            Email = user.Email!,
-            Name = user.Name,
-            Roles = await _userManager.GetRolesAsync(user)
-        });
+        return Ok(await _authService.LoginAsync(dto));
     }
 
     [HttpPost("register")]
@@ -62,184 +31,14 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        // Проверка за съществуващ имейл
-        if (await _userManager.FindByEmailAsync(dto.Email) != null)
-            return BadRequest(new { message = "Имейлът вече е зает." });
-
-        // Валидация по роля
-        if (dto.Role == "HouseManager" && dto.Building == null)
-            return BadRequest(new { message = "Домоуправителят трябва да създаде сграда." });
-
-        if (dto.Role == "Resident" && dto.JoinBuilding == null)
-            return BadRequest(new { message = "Живущият трябва да въведе код за сграда." });
-
-        Building? joinTargetBuilding = null;
-        if (dto.Role == "Resident" && dto.JoinBuilding != null)
-        {
-            joinTargetBuilding = await _context.Buildings
-                .FirstOrDefaultAsync(b => b.InviteCode == dto.JoinBuilding.InviteCode);
-
-            if (joinTargetBuilding == null)
-                return BadRequest(new { message = "Невалиден код за сграда." });
-
-            var inviteCodeError = GetInviteCodeError(joinTargetBuilding);
-            if (inviteCodeError != null)
-                return BadRequest(new { message = inviteCodeError });
-
-            if (!Enum.TryParse<ApartmentRole>(dto.JoinBuilding.Status, true, out _))
-                return BadRequest(new { message = "Невалиден статут." });
-        }
-
-        // Създаване на потребителя
-        var user = new ApplicationUser
-        {
-            FirstName = dto.FirstName,
-            LastName = dto.LastName,
-            Email = dto.Email,
-            UserName = dto.Email,
-            PhoneNumber = dto.PhoneNumber,
-            CreatedAt = DateTime.UtcNow,
-            IsActive = true,
-        };
-
-        var result = await _userManager.CreateAsync(user, dto.Password);
-        if (!result.Succeeded)
-            return BadRequest(result.Errors.Select(e => e.Description));
-
-        await _userManager.AddToRoleAsync(user, dto.Role);
-
-        string? buildingInviteCode = null;
-
-        // Сценарий 1: Домоуправител → създава сграда (+ евентуално собствен апартамент)
-        if (dto.Role == "HouseManager" && dto.Building != null)
-        {
-            var building = new Building
-            {
-                Name = dto.Building.Name,
-                Address = dto.Building.Address,
-                InviteCode = GenerateInviteCode(),
-                ManagerId = user.Id,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Buildings.Add(building);
-            await _context.SaveChangesAsync();
-
-            if (dto.Building.LivesInBuilding && !string.IsNullOrWhiteSpace(dto.Building.ApartmentNumber))
-            {
-                var apartment = new Apartment
-                {
-                    BuildingId = building.Id,
-                    Number = dto.Building.ApartmentNumber,
-                    Floor = dto.Building.Floor ?? 0,
-                    IdealParts = 0,
-                    Budget = 0
-                };
-
-                _context.Apartments.Add(apartment);
-                await _context.SaveChangesAsync();
-
-                _context.ApartmentUsers.Add(new ApartmentUser
-                {
-                    ApartmentId = apartment.Id,
-                    UserId = user.Id,
-                    Role = ApartmentRole.HouseManager
-                });
-
-                await _context.SaveChangesAsync();
-            }
-
-            buildingInviteCode = building.InviteCode;
-        }
-
-        // Сценарий 2: Живущ → проверява кода и изпраща заявка за присъединяване
-        if (dto.Role == "Resident" && dto.JoinBuilding != null && joinTargetBuilding != null)
-        {
-            var apartment = await _context.Apartments
-                .FirstOrDefaultAsync(a => a.BuildingId == joinTargetBuilding.Id
-                                        && a.Number == dto.JoinBuilding.ApartmentNumber);
-
-            if (apartment == null)
-            {
-                apartment = new Apartment
-                {
-                    BuildingId = joinTargetBuilding.Id,
-                    Number = dto.JoinBuilding.ApartmentNumber,
-                    Floor = 0,
-                    IdealParts = 0,
-                    Budget = 0
-                };
-
-                _context.Apartments.Add(apartment);
-                await _context.SaveChangesAsync();
-            }
-
-            Enum.TryParse<ApartmentRole>(dto.JoinBuilding.Status, true, out var requestedRole);
-
-            _context.JoinRequests.Add(new JoinRequest
-            {
-                UserId = user.Id,
-                BuildingId = joinTargetBuilding.Id,
-                ApartmentId = apartment.Id,
-                RequestedRole = requestedRole,
-                Notes = dto.JoinBuilding.Notes,
-                Status = JoinRequestStatus.Pending,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            joinTargetBuilding.InviteCodeUseCount++;
-
-            await _context.SaveChangesAsync();
-        }
-
-        var token = await GenerateJwtToken(user);
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            Email = user.Email!,
-            Name = user.Name,
-            Roles = await _userManager.GetRolesAsync(user),
-            BuildingInviteCode = buildingInviteCode
-        });
+        return Ok(await _authService.RegisterAsync(dto));
     }
 
     // GET: Информация за сграда по код (за живущите, преди регистрация)
     [HttpGet("building-by-code/{code}")]
     public async Task<IActionResult> GetBuildingByCode(string code)
     {
-        var building = await _context.Buildings
-            .FirstOrDefaultAsync(b => b.InviteCode == code);
-
-        if (building == null)
-            return NotFound(new { message = "Невалиден код." });
-
-        var inviteCodeError = GetInviteCodeError(building);
-        if (inviteCodeError != null)
-            return BadRequest(new { message = inviteCodeError });
-
-        return Ok(new
-        {
-            building.Id,
-            building.Name,
-            building.Address,
-            building.InviteCode
-        });
-    }
-
-    // Checks whether the invite code is still active, unexpired, and under its usage limit
-    private static string? GetInviteCodeError(Building building)
-    {
-        if (!building.InviteCodeActive)
-            return "Кодът за покана е анулиран от домоуправителя.";
-
-        if (building.InviteCodeExpiresAt.HasValue && building.InviteCodeExpiresAt.Value < DateTime.UtcNow)
-            return "Кодът за покана е изтекъл.";
-
-        if (building.InviteCodeMaxUses.HasValue && building.InviteCodeUseCount >= building.InviteCodeMaxUses.Value)
-            return "Кодът за покана е достигнал лимита си на използване.";
-
-        return null;
+        return Ok(await _authService.GetBuildingByCodeAsync(code));
     }
 
     // GET: Статус на текущия потребител — за резидента показва статуса на заявката му
@@ -250,31 +49,7 @@ public class AuthController : ControllerBase
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var isManager = User.IsInRole("HouseManager");
 
-        if (isManager)
-            return Ok(new { role = "HouseManager" });
-
-        var joinRequests = await _context.JoinRequests
-            .Where(jr => jr.UserId == userId)
-            .Include(jr => jr.Building)
-            .Include(jr => jr.Apartment)
-            .OrderByDescending(jr => jr.CreatedAt)
-            .ToListAsync();
-
-        var latest = joinRequests.FirstOrDefault();
-        if (latest == null)
-            return Ok(new { role = "Resident", membershipStatus = "None" });
-
-        var canRetry = latest.Status == JoinRequestStatus.Rejected && joinRequests.Count < 2;
-
-        return Ok(new
-        {
-            role = "Resident",
-            membershipStatus = latest.Status.ToString(),
-            buildingName = latest.Building.Name,
-            apartmentNumber = latest.Apartment.Number,
-            canRetry,
-            rejectionReason = latest.RejectionReason
-        });
+        return Ok(await _authService.GetMeAsync(userId, isManager));
     }
 
     // POST: Единствен позволен повторен опит за живущ, чиято заявка е отхвърлена
@@ -286,58 +61,8 @@ public class AuthController : ControllerBase
             return BadRequest(ModelState);
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        await _authService.ResubmitJoinRequestAsync(userId, dto);
 
-        var existingRequests = await _context.JoinRequests
-            .Where(jr => jr.UserId == userId)
-            .ToListAsync();
-
-        var latest = existingRequests.OrderByDescending(jr => jr.CreatedAt).FirstOrDefault();
-        if (latest == null || latest.Status != JoinRequestStatus.Rejected || existingRequests.Count >= 2)
-            return BadRequest(new { message = "Няма възможност за нова заявка." });
-
-        var building = await _context.Buildings
-            .FirstOrDefaultAsync(b => b.InviteCode == dto.InviteCode);
-
-        if (building == null)
-            return BadRequest(new { message = "Невалиден код за сграда." });
-
-        var inviteCodeError = GetInviteCodeError(building);
-        if (inviteCodeError != null)
-            return BadRequest(new { message = inviteCodeError });
-
-        if (!Enum.TryParse<ApartmentRole>(dto.Status, true, out var requestedRole))
-            return BadRequest(new { message = "Невалиден статут." });
-
-        var apartment = await _context.Apartments
-            .FirstOrDefaultAsync(a => a.BuildingId == building.Id && a.Number == dto.ApartmentNumber);
-
-        if (apartment == null)
-        {
-            apartment = new Apartment
-            {
-                BuildingId = building.Id,
-                Number = dto.ApartmentNumber,
-                Floor = 0,
-                IdealParts = 0,
-                Budget = 0
-            };
-
-            _context.Apartments.Add(apartment);
-            await _context.SaveChangesAsync();
-        }
-
-        _context.JoinRequests.Add(new JoinRequest
-        {
-            UserId = userId,
-            BuildingId = building.Id,
-            ApartmentId = apartment.Id,
-            RequestedRole = requestedRole,
-            Notes = dto.Notes,
-            Status = JoinRequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        });
-
-        await _context.SaveChangesAsync();
         return Ok(new { message = "Заявката е изпратена отново." });
     }
 
@@ -348,27 +73,7 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var user = await _userManager.FindByEmailAsync(dto.Email);
-
-        // Always return the same response so we don't reveal whether the email exists.
-        if (user != null && user.IsActive)
-        {
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
-            var resetLink = $"{frontendBaseUrl}/reset-password" +
-                             $"?email={Uri.EscapeDataString(dto.Email)}" +
-                             $"&token={Uri.EscapeDataString(token)}";
-
-            var body = $"""
-                <p>Здравей, {user.FirstName}!</p>
-                <p>Получихме заявка за нулиране на паролата на профила ти в ZEstate.
-                Ако не си я направил/а ти, просто игнорирай този имейл.</p>
-                <p><a href="{resetLink}">Нулирай паролата си</a></p>
-                <p>Линкът е валиден за ограничено време и може да се използва само веднъж.</p>
-                """;
-
-            await _emailSender.SendAsync(user.Email!, "Нулиране на парола — ZEstate", body);
-        }
+        await _authService.ForgotPasswordAsync(dto.Email);
 
         return Ok(new { message = "Ако имейлът съществува в системата, ще получиш линк за нулиране на паролата." });
     }
@@ -380,51 +85,8 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var user = await _userManager.FindByEmailAsync(dto.Email);
-        if (user == null)
-            return BadRequest(new { message = "Невалиден или изтекъл линк за нулиране на паролата." });
-
-        var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
-        if (!result.Succeeded)
-        {
-            var isInvalidToken = result.Errors.Any(e => e.Code == "InvalidToken");
-            var message = isInvalidToken
-                ? "Невалиден или изтекъл линк за нулиране на паролата."
-                : string.Join(" ", result.Errors.Select(e => e.Description));
-            return BadRequest(new { message });
-        }
+        await _authService.ResetPasswordAsync(dto);
 
         return Ok(new { message = "Паролата е сменена успешно." });
-    }
-
-    private static string GenerateInviteCode()
-    {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        var random = new Random();
-        return new string(Enumerable.Range(0, 8)
-            .Select(_ => chars[random.Next(chars.Length)]).ToArray());
-    }
-
-    private async Task<string> GenerateJwtToken(ApplicationUser user)
-    {
-        var roles = await _userManager.GetRolesAsync(user);
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Email, user.Email!),
-            new(ClaimTypes.Name, user.Name),
-        };
-        claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
-
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
-        var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
-            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)
-        );
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

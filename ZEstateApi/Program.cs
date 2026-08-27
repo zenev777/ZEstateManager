@@ -10,6 +10,7 @@ using ZEstate.Infrastructure.Data.IdentityModels;
 using ZEstate.Infrastructure.Data.Repository;
 using ZEstate.Infrastructure.Services;
 using ZEstateApi.Authorization;
+using ZEstateApi.Filters;
 using ZEstateApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,7 +26,7 @@ if (!string.IsNullOrEmpty(renderPort))
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
@@ -34,6 +35,19 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IRepository, Repository>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IBuildingService, BuildingService>();
+builder.Services.AddScoped<IFeeService, FeeService>();
+builder.Services.AddScoped<IRepairService, RepairService>();
+builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<IMeetingService, MeetingService>();
+builder.Services.AddScoped<IChatService, ChatService>();
+builder.Services.AddScoped<IUserNotificationService, UserNotificationService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IUserRoleService, UserRoleService>();
+builder.Services.AddScoped<IManagerTransferRequestService, ManagerTransferRequestService>();
+builder.Services.AddScoped<IVotingService, VotingService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
