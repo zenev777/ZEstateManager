@@ -16,6 +16,7 @@ namespace ZEstate.Infrastructure.Data.IdentityModels
         public string? LastName { get; set; }
         public DateTime CreatedAt { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool EmailNotificationsEnabled { get; set; } = true;
 
         public string Name => $"{FirstName} {LastName}".Trim();
     }

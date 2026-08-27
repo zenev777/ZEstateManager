@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ZEstate.Infrastructure;
@@ -11,9 +12,11 @@ using ZEstate.Infrastructure;
 namespace ZEstate.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260827084706_AddNotifications")]
+    partial class AddNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -541,11 +544,6 @@ namespace ZEstate.Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)")
                         .HasComment("Optional note from the user");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasComment("Optional reason the house manager gave when rejecting the request");
 
                     b.Property<int>("RequestedRole")
                         .HasColumnType("integer")
