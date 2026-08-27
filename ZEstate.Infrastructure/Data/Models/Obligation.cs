@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text;
 using ZEstate.Infrastructure.Data.Enums;
+using ZEstate.Infrastructure.Data.IdentityModels;
 
 namespace ZEstate.Infrastructure.Data.Models
 {
@@ -48,6 +49,12 @@ namespace ZEstate.Infrastructure.Data.Models
 
         [Comment("First day of the month this obligation was generated for (Monthly fees only, used to prevent duplicate generation); null for OneTime fees")]
         public DateTime? Period { get; set; }
+
+        [Comment("Set at apartment-transfer time if the manager chose to keep this debt with the departing owner rather than passing it to the new one")]
+        public string? PreviousOwnerUserId { get; set; }
+
+        [ForeignKey(nameof(PreviousOwnerUserId))]
+        public ApplicationUser? PreviousOwner { get; set; }
 
         public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     }
