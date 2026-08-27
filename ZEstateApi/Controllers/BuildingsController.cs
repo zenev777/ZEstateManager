@@ -347,7 +347,7 @@ public class BuildingsController : ControllerBase
 
     // POST: Отхвърляне на заявка
     [HttpPost("join-requests/{id:int}/reject")]
-    public async Task<IActionResult> RejectJoinRequest(int id)
+    public async Task<IActionResult> RejectJoinRequest(int id, [FromBody] RejectJoinRequestDto? dto)
     {
         var joinRequest = await GetPendingJoinRequestAsync(id);
         if (joinRequest == null)
@@ -355,6 +355,7 @@ public class BuildingsController : ControllerBase
 
         joinRequest.Status = JoinRequestStatus.Rejected;
         joinRequest.ReviewedAt = DateTime.UtcNow;
+        joinRequest.RejectionReason = string.IsNullOrWhiteSpace(dto?.Reason) ? null : dto.Reason.Trim();
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Заявката е отхвърлена." });

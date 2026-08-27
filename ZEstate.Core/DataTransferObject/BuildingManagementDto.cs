@@ -50,3 +50,9 @@ public class InviteCodeLimitsDto
     [Range(1, int.MaxValue)]
     public int? MaxUses { get; set; }
 }
+
+public class RejectJoinRequestDto
+{
+    [MaxLength(300)]
+    public string? Reason { get; set; }
+}
