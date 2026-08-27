@@ -10,6 +10,7 @@ using ZEstate.Infrastructure.Data.IdentityModels;
 using ZEstate.Infrastructure.Data.Repository;
 using ZEstate.Infrastructure.Services;
 using ZEstateApi.Authorization;
+using ZEstateApi.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,7 @@ if (!string.IsNullOrEmpty(renderPort))
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -74,6 +76,22 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
+
+        // SignalR's WebSocket/SSE transports can't set an Authorization header, so the
+        // client sends the JWT as an "access_token" query param for the hub path instead.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options => options.AddZEstatePolicies());
@@ -88,7 +106,11 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            // SignalR's client negotiation can use cookies/credentials depending on
+            // the transport it falls back to; AllowCredentials needs explicit
+            // origins (already the case via WithOrigins, never AllowAnyOrigin).
+            .AllowCredentials();
     });
 });
 
@@ -124,5 +146,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();
