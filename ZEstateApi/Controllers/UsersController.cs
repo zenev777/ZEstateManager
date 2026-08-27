@@ -24,6 +24,43 @@ public class UsersController : ControllerBase
         _context = context;
     }
 
+    // GET: Съседите (активните живущи) от управляваната сграда, за панела с роли
+    [HttpGet("building-members")]
+    public async Task<IActionResult> GetBuildingMembers()
+    {
+        var managerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+        var managedBuildingId = await _context.Buildings
+            .Where(b => b.ManagerId == managerId)
+            .Select(b => (int?)b.Id)
+            .FirstOrDefaultAsync();
+
+        if (managedBuildingId == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        var members = await _context.ApartmentUsers
+            .Where(au => au.IsActive && au.Apartment.BuildingId == managedBuildingId && au.UserId != managerId)
+            .Include(au => au.User)
+            .Include(au => au.Apartment)
+            .OrderBy(au => au.Apartment.Number)
+            .ToListAsync();
+
+        var result = new List<object>();
+        foreach (var member in members)
+        {
+            var roles = await _userManager.GetRolesAsync(member.User);
+            result.Add(new
+            {
+                userId = member.UserId,
+                name = member.User.Name,
+                email = member.User.Email,
+                apartmentNumber = member.Apartment.Number,
+                roles
+            });
+        }
+
+        return Ok(result);
+    }
+
     // PUT: Смяна на роля на потребител — само между Собственик/Живущ (Resident) и Касиер (Cashier).
     // Домоуправител/Администратор роли не се раздават оттук (виж RoleNames.Assignable).
     [HttpPut("{id}/role")]

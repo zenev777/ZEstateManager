@@ -41,6 +41,8 @@ builder.Services.AddScoped<IObligationGenerationService, ObligationGenerationSer
 builder.Services.AddHostedService<ObligationGenerationBackgroundService>();
 builder.Services.AddScoped<IObligationStatusService, ObligationStatusService>();
 builder.Services.AddHostedService<ObligationStatusBackgroundService>();
+builder.Services.AddScoped<IManagerTransferService, ManagerTransferService>();
+builder.Services.AddHostedService<ManagerTransferBackgroundService>();
 
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>(options =>
