@@ -53,6 +53,15 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("Minimum percentage of ideal parts that must vote for a decision to have quorum (ЗУЕС default: 50)")]
         public decimal QuorumThresholdPercent { get; set; } = 50;
 
+        [Comment("User identifier of the pending HouseManager successor, if a transfer is in progress")]
+        public string? PendingManagerTransferToUserId { get; set; }
+
+        [Comment("When the pending manager transfer was initiated")]
+        public DateTime? PendingManagerTransferInitiatedAt { get; set; }
+
+        [Comment("When the pending manager transfer takes effect, unless cancelled first")]
+        public DateTime? PendingManagerTransferEffectiveAt { get; set; }
+
         [Comment("The house manager responsible for this building")]
         public string? ManagerId { get; set; }
 
