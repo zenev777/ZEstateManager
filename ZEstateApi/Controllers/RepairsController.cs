@@ -15,8 +15,6 @@ using ZEstateApi.Authorization;
 [Authorize(Policy = PolicyNames.BuildingManagement)]
 public class RepairsController : ControllerBase
 {
-    private const long MaxUploadBytes = 10 * 1024 * 1024; // 10 MB
-
     private readonly ApplicationDbContext _context;
     private readonly IFileStorage _fileStorage;
 
@@ -220,18 +218,16 @@ public class RepairsController : ControllerBase
 
     // POST: Прикачване на фактура/документ към ремонт
     [HttpPost("{id:int}/documents")]
-    [RequestSizeLimit(MaxUploadBytes)]
+    [RequestSizeLimit(DocumentUploadValidation.MaxBytes)]
     public async Task<IActionResult> UploadDocument(int id, IFormFile file)
     {
         var repair = await GetOwnedRepairAsync(id);
         if (repair == null)
             return NotFound(new { message = "Ремонтът не е намерен." });
 
-        if (file.Length == 0)
-            return BadRequest(new { message = "Файлът е празен." });
-
-        if (file.Length > MaxUploadBytes)
-            return BadRequest(new { message = "Файлът е твърде голям (макс. 10 MB)." });
+        var validationError = DocumentUploadValidation.Validate(file);
+        if (validationError != null)
+            return BadRequest(new { message = validationError });
 
         await using var stream = file.OpenReadStream();
         var storagePath = await _fileStorage.SaveAsync(stream, file.FileName);
