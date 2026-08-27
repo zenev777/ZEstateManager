@@ -1,9 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Text;
 using ZEstate.Infrastructure.Data.Enums;
 using ZEstate.Infrastructure.Data.IdentityModels;
 
@@ -16,16 +13,26 @@ namespace ZEstate.Infrastructure.Data.Models
         public int Id { get; set; }
 
         [Required]
-        [Comment("Meeting identifier")]
-        public int MeetingId { get; set; }
+        [Comment("Vote question identifier")]
+        public int VoteQuestionId { get; set; }
 
         [Required]
-        [ForeignKey(nameof(MeetingId))]
-        public Meeting Meeting { get; set; } = null!;
+        [ForeignKey(nameof(VoteQuestionId))]
+        public VoteQuestion VoteQuestion { get; set; } = null!;
+
+        // One vote per apartment per question (ideal parts is the apartment's weight,
+        // not the casting user's) - see the unique index in ApplicationDbContext.
+        [Required]
+        [Comment("Apartment identifier this vote is cast on behalf of")]
+        public int ApartmentId { get; set; }
 
         [Required]
-        [Comment("User identifier")]
-        public string UserId { get; set; }
+        [ForeignKey(nameof(ApartmentId))]
+        public Apartment Apartment { get; set; } = null!;
+
+        [Required]
+        [Comment("User identifier of whoever cast the vote")]
+        public string UserId { get; set; } = string.Empty;
 
         [Required]
         [ForeignKey(nameof(UserId))]

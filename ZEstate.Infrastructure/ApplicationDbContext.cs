@@ -17,6 +17,12 @@ namespace ZEstate.Infrastructure
 
             builder.Entity<ApartmentUser>()
                 .HasKey(au => new { au.UserId, au.ApartmentId });
+
+            // One vote per apartment per question - ideal parts is the apartment's
+            // weight, so a second vote from the same apartment must be rejected.
+            builder.Entity<Vote>()
+                .HasIndex(v => new { v.VoteQuestionId, v.ApartmentId })
+                .IsUnique();
         }
 
         public DbSet<Building> Buildings { get; set; }
@@ -29,6 +35,7 @@ namespace ZEstate.Infrastructure
         public DbSet<Payment> Payments { get; set; }
         public DbSet<Repair> Repairs { get; set; }
         public DbSet<Vote> Votes { get; set; }
+        public DbSet<VoteQuestion> VoteQuestions { get; set; }
         public DbSet<Document> Documents { get; set; }
         public DbSet<InviteCodeLog> InviteCodeLogs { get; set; }
         public DbSet<Notification> Notifications { get; set; }
