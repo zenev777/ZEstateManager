@@ -49,6 +49,10 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("Number of times the current invite code has been used")]
         public int InviteCodeUseCount { get; set; } = 0;
 
+        [Required]
+        [Comment("Minimum percentage of ideal parts that must vote for a decision to have quorum (ЗУЕС default: 50)")]
+        public decimal QuorumThresholdPercent { get; set; } = 50;
+
         [Comment("The house manager responsible for this building")]
         public string? ManagerId { get; set; }
 

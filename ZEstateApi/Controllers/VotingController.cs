@@ -44,7 +44,35 @@ public class VotingController : ControllerBase
 
         var myApartmentId = await GetMyApartmentIdAsync(building.Id);
 
-        return Ok(questions.Select(q => QuestionResponse(q, totalIdealParts, myApartmentId)));
+        return Ok(questions.Select(q => QuestionResponse(q, totalIdealParts, building.QuorumThresholdPercent, myApartmentId)));
+    }
+
+    // GET: Историческа справка - всички гласувания в сградата и дали са били валидни (постигнат кворум)
+    [HttpGet("api/voting/history")]
+    public async Task<IActionResult> GetHistory()
+    {
+        var building = await GetMyBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш сграда." });
+
+        var totalIdealParts = await _context.Apartments
+            .Where(a => a.BuildingId == building.Id)
+            .SumAsync(a => a.IdealParts);
+
+        var questions = await _context.VoteQuestions
+            .Where(q => q.Meeting.BuildingId == building.Id)
+            .Include(q => q.Votes).ThenInclude(v => v.Apartment)
+            .Include(q => q.Meeting)
+            .OrderByDescending(q => q.StartAt)
+            .ToListAsync();
+
+        var myApartmentId = await GetMyApartmentIdAsync(building.Id);
+
+        return Ok(questions.Select(q => new
+        {
+            meetingTitle = q.Meeting.Title,
+            question = QuestionResponse(q, totalIdealParts, building.QuorumThresholdPercent, myApartmentId)
+        }));
     }
 
     // POST: Създаване на въпрос за гласуване, обвързан със събрание
@@ -60,6 +88,7 @@ public class VotingController : ControllerBase
 
         var managerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
         var meeting = await _context.Meetings
+            .Include(m => m.Building)
             .FirstOrDefaultAsync(m => m.Id == meetingId && m.Building.ManagerId == managerId);
 
         if (meeting == null)
@@ -80,7 +109,7 @@ public class VotingController : ControllerBase
             .Where(a => a.BuildingId == meeting.BuildingId)
             .SumAsync(a => a.IdealParts);
 
-        return Ok(QuestionResponse(question, totalIdealParts, null));
+        return Ok(QuestionResponse(question, totalIdealParts, meeting.Building.QuorumThresholdPercent, null));
     }
 
     // POST: Гласуване по въпрос - веднъж на апартамент, само в рамките на времевия прозорец
@@ -127,7 +156,7 @@ public class VotingController : ControllerBase
     public async Task<IActionResult> GetResult(int id)
     {
         var question = await _context.VoteQuestions
-            .Include(q => q.Meeting)
+            .Include(q => q.Meeting).ThenInclude(m => m.Building)
             .Include(q => q.Votes).ThenInclude(v => v.Apartment)
             .FirstOrDefaultAsync(q => q.Id == id);
 
@@ -140,10 +169,10 @@ public class VotingController : ControllerBase
 
         var myApartmentId = await GetMyApartmentIdAsync(question.Meeting.BuildingId);
 
-        return Ok(QuestionResponse(question, totalIdealParts, myApartmentId));
+        return Ok(QuestionResponse(question, totalIdealParts, question.Meeting.Building.QuorumThresholdPercent, myApartmentId));
     }
 
-    private static object QuestionResponse(VoteQuestion question, decimal totalIdealParts, int? myApartmentId)
+    private static object QuestionResponse(VoteQuestion question, decimal totalIdealParts, decimal quorumThresholdPercent, int? myApartmentId)
     {
         var yesWeight = question.Votes.Where(v => v.Value == VoteValue.Yes).Sum(v => v.Apartment.IdealParts);
         var noWeight = question.Votes.Where(v => v.Value == VoteValue.No).Sum(v => v.Apartment.IdealParts);
@@ -152,6 +181,9 @@ public class VotingController : ControllerBase
 
         var now = DateTime.UtcNow;
         var status = now < question.StartAt ? "Scheduled" : now > question.EndAt ? "Closed" : "Open";
+
+        var turnoutPercent = totalIdealParts > 0 ? Math.Round(votedWeight / totalIdealParts * 100, 1) : 0;
+        var quorumMet = turnoutPercent >= quorumThresholdPercent;
 
         return new
         {
@@ -172,7 +204,12 @@ public class VotingController : ControllerBase
                 yesPercent = votedWeight > 0 ? Math.Round(yesWeight / votedWeight * 100, 1) : 0,
                 noPercent = votedWeight > 0 ? Math.Round(noWeight / votedWeight * 100, 1) : 0,
                 abstainPercent = votedWeight > 0 ? Math.Round(abstainWeight / votedWeight * 100, 1) : 0,
-                turnoutPercent = totalIdealParts > 0 ? Math.Round(votedWeight / totalIdealParts * 100, 1) : 0
+                turnoutPercent,
+                quorumThresholdPercent,
+                quorumMet,
+                // Only meaningful once voting has actually closed - regardless of the
+                // Yes/No split, a Closed question without quorum is void per ЗУЕС.
+                isValid = status == "Closed" ? quorumMet : (bool?)null
             }
         };
     }
