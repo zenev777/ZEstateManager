@@ -77,4 +77,9 @@ namespace ZEstate.Infrastructure.Data.Enums
         Revoked,
         LimitsUpdated
     }
+    public enum FeeFrequency
+    {
+        OneTime,
+        Monthly
+    }
 }

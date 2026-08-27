@@ -36,6 +36,8 @@ builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddSingleton<NotificationEmailQueue>();
 builder.Services.AddHostedService<NotificationEmailDispatcher>();
+builder.Services.AddScoped<IObligationGenerationService, ObligationGenerationService>();
+builder.Services.AddHostedService<ObligationGenerationBackgroundService>();
 
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>(options =>
