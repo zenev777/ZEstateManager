@@ -44,7 +44,7 @@ public class UpdateApartmentDto
 
 public class InviteCodeLimitsDto
 {
-    // null означава без ограничение
+    // null means no limit
     public DateTime? ExpiresAt { get; set; }
 
     [Range(1, int.MaxValue)]

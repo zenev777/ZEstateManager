@@ -51,7 +51,7 @@ public class BuildingsController : ControllerBase
         return Ok(BuildingResponse(building));
     }
 
-    // POST: Обновяване на кода за покана - старият веднага става невалиден
+    // POST: Regenerates the invite code - the old one becomes invalid immediately
     [HttpPost("my/invite-code/regenerate")]
     public async Task<IActionResult> RegenerateInviteCode()
     {
@@ -85,7 +85,7 @@ public class BuildingsController : ControllerBase
         return Ok(BuildingResponse(building));
     }
 
-    // POST: Анулиране на кода без генериране на нов - временно спира нови регистрации
+    // POST: Revokes the code without issuing a new one - pauses new registrations
     [HttpPost("my/invite-code/revoke")]
     public async Task<IActionResult> RevokeInviteCode()
     {
@@ -108,7 +108,7 @@ public class BuildingsController : ControllerBase
         return Ok(BuildingResponse(building));
     }
 
-    // PUT: Задаване на срок на валидност и/или лимит на брой използвания на кода
+    // PUT: Sets an optional expiration date and/or usage limit for the code
     [HttpPut("my/invite-code/limits")]
     public async Task<IActionResult> UpdateInviteCodeLimits([FromBody] InviteCodeLimitsDto dto)
     {
@@ -136,7 +136,7 @@ public class BuildingsController : ControllerBase
         return Ok(BuildingResponse(building));
     }
 
-    // GET: История на промените по кода за покана
+    // GET: History of changes made to the invite code
     [HttpGet("my/invite-code/log")]
     public async Task<IActionResult> GetInviteCodeLog()
     {

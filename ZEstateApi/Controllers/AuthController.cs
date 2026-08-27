@@ -223,7 +223,7 @@ public class AuthController : ControllerBase
         });
     }
 
-    // Проверява дали кодът за покана още е активен, неизтекъл и под лимита на използвания
+    // Checks whether the invite code is still active, unexpired, and under its usage limit
     private static string? GetInviteCodeError(Building building)
     {
         if (!building.InviteCodeActive)
