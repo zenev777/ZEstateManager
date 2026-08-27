@@ -30,6 +30,12 @@ namespace ZEstate.Infrastructure.Data.Models
         [ForeignKey(nameof(RepairId))]
         public Repair? Repair { get; set; }
 
+        [Comment("Meeting identifier, if document is minutes/protocol for a meeting")]
+        public int? MeetingId { get; set; }
+
+        [ForeignKey(nameof(MeetingId))]
+        public Meeting? Meeting { get; set; }
+
         [Required]
         [MaxLength(FilePathMaxLength)]
         [Comment("File storage path")]
