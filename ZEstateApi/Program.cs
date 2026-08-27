@@ -33,6 +33,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddScoped<IRepository, Repository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddSingleton<NotificationEmailQueue>();
+builder.Services.AddHostedService<NotificationEmailDispatcher>();
 
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>(options =>

@@ -31,5 +31,6 @@ namespace ZEstate.Infrastructure
         public DbSet<Vote> Votes { get; set; }
         public DbSet<Document> Documents { get; set; }
         public DbSet<InviteCodeLog> InviteCodeLogs { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
     }
 }
