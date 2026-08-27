@@ -1,13 +1,9 @@
 // FeesController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ZEstate.Core.DTOs.Fees;
 using ZEstate.Core.Interfaces;
-using ZEstate.Infrastructure;
-using ZEstate.Infrastructure.Data.Enums;
-using ZEstate.Infrastructure.Data.Models;
 using ZEstateApi.Authorization;
 
 [ApiController]
@@ -15,36 +11,17 @@ using ZEstateApi.Authorization;
 [Authorize(Policy = PolicyNames.BuildingManagement)]
 public class FeesController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-    private readonly IObligationGenerationService _obligationGenerationService;
-    private readonly IObligationStatusService _obligationStatusService;
+    private readonly IFeeService _feeService;
 
-    public FeesController(
-        ApplicationDbContext context,
-        IObligationGenerationService obligationGenerationService,
-        IObligationStatusService obligationStatusService)
+    public FeesController(IFeeService feeService)
     {
-        _context = context;
-        _obligationGenerationService = obligationGenerationService;
-        _obligationStatusService = obligationStatusService;
+        _feeService = feeService;
     }
 
     // GET: Всички такси на управляваната сграда
     [HttpGet]
-    public async Task<IActionResult> GetFees()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var fees = await _context.Fees
-            .Where(f => f.BuildingId == building.Id)
-            .OrderByDescending(f => f.CreatedAt)
-            .Select(f => FeeResponse(f))
-            .ToListAsync();
-
-        return Ok(fees);
-    }
+    public async Task<IActionResult> GetFees() =>
+        Ok(await _feeService.GetFeesAsync(CurrentUserId));
 
     // POST: Създаване на такса
     [HttpPost]
@@ -53,36 +30,7 @@ public class FeesController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        if (!Enum.TryParse<FeeType>(dto.Type, true, out var type))
-            return BadRequest(new { message = "Невалиден тип такса. Позволени стойности: Fixed, PerIdealPart." });
-
-        if (!Enum.TryParse<FeeFrequency>(dto.Frequency, true, out var frequency))
-            return BadRequest(new { message = "Невалидна периодичност. Позволени стойности: OneTime, Monthly." });
-
-        if (!Enum.TryParse<FeePriority>(dto.Priority, true, out var priority))
-            return BadRequest(new { message = "Невалиден приоритет." });
-
-        var fee = new Fee
-        {
-            BuildingId = building.Id,
-            Title = dto.Title,
-            Description = dto.Description,
-            Amount = dto.Amount,
-            Type = type,
-            Frequency = frequency,
-            DateFrom = dto.DateFrom,
-            DateTo = dto.DateTo,
-            Priority = priority
-        };
-
-        _context.Fees.Add(fee);
-        await _context.SaveChangesAsync();
-
-        return Ok(FeeResponse(fee));
+        return Ok(await _feeService.CreateFeeAsync(CurrentUserId, dto));
     }
 
     // PUT: Редакция на такса
@@ -92,48 +40,14 @@ public class FeesController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var fee = await GetOwnedFeeAsync(id);
-        if (fee == null)
-            return NotFound(new { message = "Таксата не е намерена." });
-
-        if (!Enum.TryParse<FeeType>(dto.Type, true, out var type))
-            return BadRequest(new { message = "Невалиден тип такса. Позволени стойности: Fixed, PerIdealPart." });
-
-        if (!Enum.TryParse<FeeFrequency>(dto.Frequency, true, out var frequency))
-            return BadRequest(new { message = "Невалидна периодичност. Позволени стойности: OneTime, Monthly." });
-
-        if (!Enum.TryParse<FeePriority>(dto.Priority, true, out var priority))
-            return BadRequest(new { message = "Невалиден приоритет." });
-
-        fee.Title = dto.Title;
-        fee.Description = dto.Description;
-        fee.Amount = dto.Amount;
-        fee.Type = type;
-        fee.Frequency = frequency;
-        fee.DateFrom = dto.DateFrom;
-        fee.DateTo = dto.DateTo;
-        fee.Priority = priority;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(FeeResponse(fee));
+        return Ok(await _feeService.UpdateFeeAsync(CurrentUserId, id, dto));
     }
 
     // DELETE: Изтриване на такса (само ако все още няма генерирани задължения по нея)
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteFee(int id)
     {
-        var fee = await GetOwnedFeeAsync(id);
-        if (fee == null)
-            return NotFound(new { message = "Таксата не е намерена." });
-
-        var hasObligations = await _context.Obligations.AnyAsync(o => o.FeeId == id);
-        if (hasObligations)
-            return BadRequest(new { message = "Таксата има генерирани задължения и не може да бъде изтрита." });
-
-        _context.Fees.Remove(fee);
-        await _context.SaveChangesAsync();
-
+        await _feeService.DeleteFeeAsync(CurrentUserId, id);
         return Ok(new { message = "Таксата е изтрита." });
     }
 
@@ -142,103 +56,29 @@ public class FeesController : ControllerBase
     [HttpPost("generate-obligations")]
     public async Task<IActionResult> GenerateObligations()
     {
-        var result = await _obligationGenerationService.GenerateForCurrentPeriodAsync();
+        var result = await _feeService.GenerateObligationsAsync();
         return Ok(new { result.Created, result.SkippedExisting });
     }
 
     // GET: Генерираните задължения на управляваната сграда
     [HttpGet("obligations")]
-    public async Task<IActionResult> GetObligations()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var obligations = await _context.Obligations
-            .Where(o => o.Apartment.BuildingId == building.Id)
-            .Include(o => o.Apartment)
-            .Include(o => o.Fee)
-            .OrderByDescending(o => o.DateCreated)
-            .Select(o => new
-            {
-                o.Id,
-                ApartmentNumber = o.Apartment.Number,
-                FeeTitle = o.Fee.Title,
-                o.Amount,
-                o.Status,
-                o.Period,
-                o.DueDate,
-                o.DateCreated
-            })
-            .ToListAsync();
-
-        return Ok(obligations);
-    }
+    public async Task<IActionResult> GetObligations() =>
+        Ok(await _feeService.GetObligationsAsync(CurrentUserId));
 
     // GET: Справка за домоуправителя - брой задължения по статус за цялата сграда
     [HttpGet("obligations/summary")]
-    public async Task<IActionResult> GetObligationsSummary()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var counts = await _context.Obligations
-            .Where(o => o.Apartment.BuildingId == building.Id)
-            .GroupBy(o => o.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count(), Total = g.Sum(o => o.Amount) })
-            .ToListAsync();
-
-        object Summarize(ObligationStatus status)
-        {
-            var match = counts.FirstOrDefault(c => c.Status == status);
-            return new { count = match?.Count ?? 0, total = match?.Total ?? 0m };
-        }
-
-        return Ok(new
-        {
-            pending = Summarize(ObligationStatus.Pending),
-            partiallyPaid = Summarize(ObligationStatus.PartiallyPaid),
-            paid = Summarize(ObligationStatus.Paid),
-            overdue = Summarize(ObligationStatus.Overdue)
-        });
-    }
+    public async Task<IActionResult> GetObligationsSummary() =>
+        Ok(await _feeService.GetObligationsSummaryAsync(CurrentUserId));
 
     // POST: Ръчно стартиране на просрочване (демо/тест удобство - същата логика, която
     // фоновата задача пуска автоматично всеки ден)
     [HttpPost("mark-overdue")]
     public async Task<IActionResult> MarkOverdue()
     {
-        var count = await _obligationStatusService.MarkOverdueAsync();
+        var count = await _feeService.MarkOverdueAsync();
         return Ok(new { markedOverdue = count });
     }
 
-    private static object FeeResponse(Fee fee) => new
-    {
-        fee.Id,
-        fee.Title,
-        fee.Description,
-        fee.Amount,
-        fee.Type,
-        fee.Frequency,
-        fee.DateFrom,
-        fee.DateTo,
-        fee.Priority,
-        fee.CreatedAt
-    };
-
     private string CurrentUserId =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-    private Task<Building?> GetManagedBuildingAsync() =>
-        _context.Buildings.FirstOrDefaultAsync(b => b.ManagerId == CurrentUserId);
-
-    private async Task<Fee?> GetOwnedFeeAsync(int id)
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return null;
-
-        return await _context.Fees.FirstOrDefaultAsync(f => f.Id == id && f.BuildingId == building.Id);
-    }
 }

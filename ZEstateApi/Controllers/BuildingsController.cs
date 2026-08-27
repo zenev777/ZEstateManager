@@ -1,13 +1,9 @@
 // BuildingsController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ZEstate.Core.DTOs.Buildings;
 using ZEstate.Core.Interfaces;
-using ZEstate.Infrastructure;
-using ZEstate.Infrastructure.Data.Enums;
-using ZEstate.Infrastructure.Data.Models;
 using ZEstateApi.Authorization;
 
 [ApiController]
@@ -15,25 +11,17 @@ using ZEstateApi.Authorization;
 [Authorize(Policy = PolicyNames.BuildingManagement)]
 public class BuildingsController : ControllerBase
 {
-    private readonly ApplicationDbContext _context;
-    private readonly INotificationService _notificationService;
+    private readonly IBuildingService _buildingService;
 
-    public BuildingsController(ApplicationDbContext context, INotificationService notificationService)
+    public BuildingsController(IBuildingService buildingService)
     {
-        _context = context;
-        _notificationService = notificationService;
+        _buildingService = buildingService;
     }
 
     // GET: Сградата, управлявана от текущия домоуправител
     [HttpGet("my")]
-    public async Task<IActionResult> GetMyBuilding()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        return Ok(BuildingResponse(building));
-    }
+    public async Task<IActionResult> GetMyBuilding() =>
+        Ok(await _buildingService.GetMyBuildingAsync(CurrentUserId));
 
     // PUT: Редакция на име/адрес на управляваната сграда
     [HttpPut("my")]
@@ -42,74 +30,18 @@ public class BuildingsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        building.Name = dto.Name;
-        building.Address = dto.Address;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(BuildingResponse(building));
+        return Ok(await _buildingService.UpdateMyBuildingAsync(CurrentUserId, dto));
     }
 
     // POST: Regenerates the invite code - the old one becomes invalid immediately
     [HttpPost("my/invite-code/regenerate")]
-    public async Task<IActionResult> RegenerateInviteCode()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var oldCode = building.InviteCode;
-
-        string newCode;
-        do
-        {
-            newCode = GenerateInviteCode();
-        } while (await _context.Buildings.AnyAsync(b => b.InviteCode == newCode));
-
-        building.InviteCode = newCode;
-        building.InviteCodeActive = true;
-        building.InviteCodeUseCount = 0;
-
-        _context.InviteCodeLogs.Add(new InviteCodeLog
-        {
-            BuildingId = building.Id,
-            ChangedByUserId = CurrentUserId,
-            Action = InviteCodeAction.Regenerated,
-            OldCode = oldCode,
-            NewCode = newCode
-        });
-
-        await _context.SaveChangesAsync();
-
-        return Ok(BuildingResponse(building));
-    }
+    public async Task<IActionResult> RegenerateInviteCode() =>
+        Ok(await _buildingService.RegenerateInviteCodeAsync(CurrentUserId));
 
     // POST: Revokes the code without issuing a new one - pauses new registrations
     [HttpPost("my/invite-code/revoke")]
-    public async Task<IActionResult> RevokeInviteCode()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        building.InviteCodeActive = false;
-
-        _context.InviteCodeLogs.Add(new InviteCodeLog
-        {
-            BuildingId = building.Id,
-            ChangedByUserId = CurrentUserId,
-            Action = InviteCodeAction.Revoked,
-            OldCode = building.InviteCode
-        });
-
-        await _context.SaveChangesAsync();
-
-        return Ok(BuildingResponse(building));
-    }
+    public async Task<IActionResult> RevokeInviteCode() =>
+        Ok(await _buildingService.RevokeInviteCodeAsync(CurrentUserId));
 
     // PUT: Sets an optional expiration date and/or usage limit for the code
     [HttpPut("my/invite-code/limits")]
@@ -118,52 +50,13 @@ public class BuildingsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        building.InviteCodeExpiresAt = dto.ExpiresAt;
-        building.InviteCodeMaxUses = dto.MaxUses;
-
-        _context.InviteCodeLogs.Add(new InviteCodeLog
-        {
-            BuildingId = building.Id,
-            ChangedByUserId = CurrentUserId,
-            Action = InviteCodeAction.LimitsUpdated,
-            OldCode = building.InviteCode,
-            NewCode = building.InviteCode
-        });
-
-        await _context.SaveChangesAsync();
-
-        return Ok(BuildingResponse(building));
+        return Ok(await _buildingService.UpdateInviteCodeLimitsAsync(CurrentUserId, dto));
     }
 
     // GET: History of changes made to the invite code
     [HttpGet("my/invite-code/log")]
-    public async Task<IActionResult> GetInviteCodeLog()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var log = await _context.InviteCodeLogs
-            .Where(l => l.BuildingId == building.Id)
-            .Include(l => l.ChangedBy)
-            .OrderByDescending(l => l.ChangedAt)
-            .Select(l => new
-            {
-                l.Id,
-                l.Action,
-                l.OldCode,
-                l.NewCode,
-                l.ChangedAt,
-                ChangedByName = l.ChangedBy.Name
-            })
-            .ToListAsync();
-
-        return Ok(log);
-    }
+    public async Task<IActionResult> GetInviteCodeLog() =>
+        Ok(await _buildingService.GetInviteCodeLogAsync(CurrentUserId));
 
     // PUT: Смяна на прага за кворум (% идеални части) при гласувания. По подразбиране 50 (ЗУЕС).
     [HttpPut("my/quorum-threshold")]
@@ -172,43 +65,13 @@ public class BuildingsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        building.QuorumThresholdPercent = dto.QuorumThresholdPercent;
-        await _context.SaveChangesAsync();
-
-        return Ok(BuildingResponse(building));
+        return Ok(await _buildingService.UpdateQuorumThresholdAsync(CurrentUserId, dto.QuorumThresholdPercent));
     }
 
     // GET: Апартаментите в управляваната сграда + сбор на идеалните части
     [HttpGet("my/apartments")]
-    public async Task<IActionResult> GetApartments()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var apartments = await _context.Apartments
-            .Where(a => a.BuildingId == building.Id)
-            .OrderBy(a => a.Number)
-            .Select(a => new
-            {
-                a.Id,
-                a.Number,
-                a.Floor,
-                a.IdealParts,
-                a.Budget
-            })
-            .ToListAsync();
-
-        return Ok(new
-        {
-            apartments,
-            idealPartsTotal = apartments.Sum(a => a.IdealParts)
-        });
-    }
+    public async Task<IActionResult> GetApartments() =>
+        Ok(await _buildingService.GetApartmentsAsync(CurrentUserId));
 
     // POST: Създаване на апартамент в управляваната сграда
     [HttpPost("my/apartments")]
@@ -217,42 +80,7 @@ public class BuildingsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var numberTaken = await _context.Apartments
-            .AnyAsync(a => a.BuildingId == building.Id && a.Number == dto.Number);
-        if (numberTaken)
-            return BadRequest(new { message = "Вече има апартамент с този номер." });
-
-        var currentTotal = await _context.Apartments
-            .Where(a => a.BuildingId == building.Id)
-            .SumAsync(a => a.IdealParts);
-
-        if (currentTotal + dto.IdealParts > 100)
-            return BadRequest(new { message = $"Сборът от идеалните части не може да надвишава 100%. Свободни: {100 - currentTotal}%." });
-
-        var apartment = new Apartment
-        {
-            BuildingId = building.Id,
-            Number = dto.Number,
-            Floor = dto.Floor,
-            IdealParts = dto.IdealParts,
-            Budget = 0
-        };
-
-        _context.Apartments.Add(apartment);
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            apartment.Id,
-            apartment.Number,
-            apartment.Floor,
-            apartment.IdealParts,
-            apartment.Budget
-        });
+        return Ok(await _buildingService.CreateApartmentAsync(CurrentUserId, dto));
     }
 
     // PUT: Редакция на апартамент в управляваната сграда
@@ -262,53 +90,14 @@ public class BuildingsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var apartment = await GetOwnedApartmentAsync(id);
-        if (apartment == null)
-            return NotFound(new { message = "Апартаментът не е намерен." });
-
-        var numberTaken = await _context.Apartments
-            .AnyAsync(a => a.BuildingId == apartment.BuildingId && a.Number == dto.Number && a.Id != id);
-        if (numberTaken)
-            return BadRequest(new { message = "Вече има апартамент с този номер." });
-
-        var otherTotal = await _context.Apartments
-            .Where(a => a.BuildingId == apartment.BuildingId && a.Id != id)
-            .SumAsync(a => a.IdealParts);
-
-        if (otherTotal + dto.IdealParts > 100)
-            return BadRequest(new { message = $"Сборът от идеалните части не може да надвишава 100%. Свободни: {100 - otherTotal}%." });
-
-        apartment.Number = dto.Number;
-        apartment.Floor = dto.Floor;
-        apartment.IdealParts = dto.IdealParts;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            apartment.Id,
-            apartment.Number,
-            apartment.Floor,
-            apartment.IdealParts,
-            apartment.Budget
-        });
+        return Ok(await _buildingService.UpdateApartmentAsync(CurrentUserId, id, dto));
     }
 
     // DELETE: Изтриване на апартамент в управляваната сграда
     [HttpDelete("my/apartments/{id:int}")]
     public async Task<IActionResult> DeleteApartment(int id)
     {
-        var apartment = await GetOwnedApartmentAsync(id);
-        if (apartment == null)
-            return NotFound(new { message = "Апартаментът не е намерен." });
-
-        var hasResidents = await _context.ApartmentUsers.AnyAsync(au => au.ApartmentId == id);
-        if (hasResidents)
-            return BadRequest(new { message = "Апартаментът има свързани живущи и не може да бъде изтрит." });
-
-        _context.Apartments.Remove(apartment);
-        await _context.SaveChangesAsync();
-
+        await _buildingService.DeleteApartmentAsync(CurrentUserId, id);
         return Ok(new { message = "Апартаментът е изтрит." });
     }
 
@@ -321,159 +110,31 @@ public class BuildingsController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        if (!Enum.TryParse<DebtHandling>(dto.DebtHandling, true, out var debtHandling))
-            return BadRequest(new { message = "Невалидна стойност. Позволени: TransfersToNewOwner, StaysWithPreviousOwner." });
-
-        var apartment = await GetOwnedApartmentAsync(id);
-        if (apartment == null)
-            return NotFound(new { message = "Апартаментът не е намерен." });
-
-        var activeMembers = await _context.ApartmentUsers
-            .Where(au => au.ApartmentId == id && au.IsActive)
-            .Include(au => au.User)
-            .ToListAsync();
-
-        if (activeMembers.Count == 0)
-            return BadRequest(new { message = "Апартаментът няма активен собственик за прехвърляне." });
-
-        var outstandingObligations = await _context.Obligations
-            .Where(o => o.ApartmentId == id
-                     && (o.Status == ObligationStatus.Pending || o.Status == ObligationStatus.PartiallyPaid || o.Status == ObligationStatus.Overdue))
-            .Include(o => o.Payments)
-            .ToListAsync();
-
-        var outstandingBalance = outstandingObligations.Sum(o => o.Amount - o.Payments.Sum(p => p.Amount));
-
-        // With co-owners this picks one as "the" previous owner for the audit log;
-        // every active member still loses access below regardless.
-        var previousOwner = activeMembers.FirstOrDefault(au => au.Role == ApartmentRole.Owner) ?? activeMembers[0];
-
-        foreach (var member in activeMembers)
-        {
-            member.IsActive = false;
-        }
-
-        if (debtHandling == DebtHandling.StaysWithPreviousOwner)
-        {
-            foreach (var obligation in outstandingObligations)
-            {
-                obligation.PreviousOwnerUserId = previousOwner.UserId;
-            }
-        }
-
-        _context.ApartmentTransferLogs.Add(new ApartmentTransferLog
-        {
-            ApartmentId = id,
-            PreviousOwnerUserId = previousOwner.UserId,
-            TransferredByUserId = CurrentUserId,
-            DebtHandling = debtHandling,
-            OutstandingBalanceAtTransfer = outstandingBalance
-        });
-
-        await _context.SaveChangesAsync();
-
-        foreach (var member in activeMembers)
-        {
-            await _notificationService.NotifyAsync(
-                member.UserId,
-                "Достъпът ти беше прекратен",
-                $"Домоуправителят маркира апартамент {apartment.Number} като прехвърлен. Достъпът ти до сградата е деактивиран.",
-                null,
-                allowEmail: true);
-        }
+        var result = await _buildingService.TransferApartmentAsync(CurrentUserId, id, dto.DebtHandling);
 
         return Ok(new
         {
             message = "Апартаментът е маркиран като прехвърлен.",
-            outstandingBalance,
-            debtHandling
+            outstandingBalance = result.OutstandingBalance,
+            debtHandling = result.DebtHandling
         });
     }
 
     // GET: История на прехвърлянията на апартамент - за одиторски цели
     [HttpGet("my/apartments/{id:int}/transfers")]
-    public async Task<IActionResult> GetApartmentTransfers(int id)
-    {
-        var apartment = await GetOwnedApartmentAsync(id);
-        if (apartment == null)
-            return NotFound(new { message = "Апартаментът не е намерен." });
-
-        var transfers = await _context.ApartmentTransferLogs
-            .Where(t => t.ApartmentId == id)
-            .Include(t => t.PreviousOwner)
-            .Include(t => t.TransferredBy)
-            .OrderByDescending(t => t.TransferredAt)
-            .Select(t => new
-            {
-                t.Id,
-                PreviousOwnerName = t.PreviousOwner != null ? t.PreviousOwner.Name : null,
-                TransferredByName = t.TransferredBy.Name,
-                t.DebtHandling,
-                t.OutstandingBalanceAtTransfer,
-                t.TransferredAt
-            })
-            .ToListAsync();
-
-        return Ok(transfers);
-    }
+    public async Task<IActionResult> GetApartmentTransfers(int id) =>
+        Ok(await _buildingService.GetApartmentTransfersAsync(CurrentUserId, id));
 
     // GET: Чакащи заявки за присъединяване към сградата
     [HttpGet("my/join-requests")]
-    public async Task<IActionResult> GetJoinRequests()
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var requests = await _context.JoinRequests
-            .Where(jr => jr.BuildingId == building.Id && jr.Status == JoinRequestStatus.Pending)
-            .Include(jr => jr.User)
-            .Include(jr => jr.Apartment)
-            .OrderBy(jr => jr.CreatedAt)
-            .Select(jr => new
-            {
-                jr.Id,
-                Name = jr.User.Name,
-                Email = jr.User.Email,
-                Phone = jr.User.PhoneNumber,
-                ApartmentNumber = jr.Apartment.Number,
-                jr.RequestedRole,
-                jr.Notes,
-                jr.CreatedAt
-            })
-            .ToListAsync();
-
-        return Ok(requests);
-    }
+    public async Task<IActionResult> GetJoinRequests() =>
+        Ok(await _buildingService.GetJoinRequestsAsync(CurrentUserId));
 
     // POST: Одобряване на заявка — създава ApartmentUser за живущия
     [HttpPost("join-requests/{id:int}/approve")]
     public async Task<IActionResult> ApproveJoinRequest(int id)
     {
-        var joinRequest = await GetPendingJoinRequestAsync(id);
-        if (joinRequest == null)
-            return NotFound(new { message = "Заявката не е намерена." });
-
-        joinRequest.Status = JoinRequestStatus.Approved;
-        joinRequest.ReviewedAt = DateTime.UtcNow;
-
-        _context.ApartmentUsers.Add(new ApartmentUser
-        {
-            ApartmentId = joinRequest.ApartmentId,
-            UserId = joinRequest.UserId,
-            Role = joinRequest.RequestedRole,
-            IsActive = true,
-            JoinedAt = DateTime.UtcNow
-        });
-
-        await _context.SaveChangesAsync();
-
-        await _notificationService.NotifyAsync(
-            joinRequest.UserId,
-            "Заявката ти е одобрена",
-            $"Заявката ти за апартамент {joinRequest.Apartment.Number} в {joinRequest.Building.Name} е одобрена.",
-            "/dashboard");
-
+        await _buildingService.ApproveJoinRequestAsync(CurrentUserId, id);
         return Ok(new { message = "Заявката е одобрена." });
     }
 
@@ -481,73 +142,10 @@ public class BuildingsController : ControllerBase
     [HttpPost("join-requests/{id:int}/reject")]
     public async Task<IActionResult> RejectJoinRequest(int id, [FromBody] RejectJoinRequestDto? dto)
     {
-        var joinRequest = await GetPendingJoinRequestAsync(id);
-        if (joinRequest == null)
-            return NotFound(new { message = "Заявката не е намерена." });
-
-        joinRequest.Status = JoinRequestStatus.Rejected;
-        joinRequest.ReviewedAt = DateTime.UtcNow;
-        joinRequest.RejectionReason = string.IsNullOrWhiteSpace(dto?.Reason) ? null : dto.Reason.Trim();
-
-        await _context.SaveChangesAsync();
-
-        var message = joinRequest.RejectionReason != null
-            ? $"Заявката ти за апартамент {joinRequest.Apartment.Number} в {joinRequest.Building.Name} беше отхвърлена. Причина: {joinRequest.RejectionReason}"
-            : $"Заявката ти за апартамент {joinRequest.Apartment.Number} в {joinRequest.Building.Name} беше отхвърлена.";
-
-        await _notificationService.NotifyAsync(joinRequest.UserId, "Заявката ти беше отхвърлена", message, "/dashboard");
-
+        await _buildingService.RejectJoinRequestAsync(CurrentUserId, id, dto?.Reason);
         return Ok(new { message = "Заявката е отхвърлена." });
-    }
-
-    private static object BuildingResponse(Building building) => new
-    {
-        building.Id,
-        building.Name,
-        building.Address,
-        building.InviteCode,
-        building.InviteCodeActive,
-        building.InviteCodeExpiresAt,
-        building.InviteCodeMaxUses,
-        building.InviteCodeUseCount,
-        building.QuorumThresholdPercent
-    };
-
-    private static string GenerateInviteCode()
-    {
-        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        var random = new Random();
-        return new string(Enumerable.Range(0, 8)
-            .Select(_ => chars[random.Next(chars.Length)]).ToArray());
     }
 
     private string CurrentUserId =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-    private Task<Building?> GetManagedBuildingAsync() =>
-        _context.Buildings.FirstOrDefaultAsync(b => b.ManagerId == CurrentUserId);
-
-    private async Task<Apartment?> GetOwnedApartmentAsync(int id)
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return null;
-
-        return await _context.Apartments
-            .FirstOrDefaultAsync(a => a.Id == id && a.BuildingId == building.Id);
-    }
-
-    private async Task<JoinRequest?> GetPendingJoinRequestAsync(int id)
-    {
-        var building = await GetManagedBuildingAsync();
-        if (building == null)
-            return null;
-
-        return await _context.JoinRequests
-            .Include(jr => jr.Building)
-            .Include(jr => jr.Apartment)
-            .FirstOrDefaultAsync(jr => jr.Id == id
-                                     && jr.BuildingId == building.Id
-                                     && jr.Status == JoinRequestStatus.Pending);
-    }
 }

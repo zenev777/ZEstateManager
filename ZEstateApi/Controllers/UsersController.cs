@@ -1,13 +1,10 @@
 // UsersController.cs
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ZEstate.Core.DTOs.Users;
-using ZEstate.Infrastructure;
+using ZEstate.Core.Interfaces;
 using ZEstate.Infrastructure.Data.DataConstants;
-using ZEstate.Infrastructure.Data.IdentityModels;
 using ZEstateApi.Authorization;
 
 [ApiController]
@@ -15,98 +12,31 @@ using ZEstateApi.Authorization;
 [Authorize(Policy = PolicyNames.BuildingManagement)]
 public class UsersController : ControllerBase
 {
-    private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ApplicationDbContext _context;
+    private readonly IUserRoleService _userRoleService;
 
-    public UsersController(UserManager<ApplicationUser> userManager, ApplicationDbContext context)
+    public UsersController(IUserRoleService userRoleService)
     {
-        _userManager = userManager;
-        _context = context;
+        _userRoleService = userRoleService;
     }
 
     // GET: Съседите (активните живущи) от управляваната сграда, за панела с роли
     [HttpGet("building-members")]
-    public async Task<IActionResult> GetBuildingMembers()
-    {
-        var managerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        var managedBuildingId = await _context.Buildings
-            .Where(b => b.ManagerId == managerId)
-            .Select(b => (int?)b.Id)
-            .FirstOrDefaultAsync();
-
-        if (managedBuildingId == null)
-            return NotFound(new { message = "Нямаш управлявана сграда." });
-
-        var members = await _context.ApartmentUsers
-            .Where(au => au.IsActive && au.Apartment.BuildingId == managedBuildingId && au.UserId != managerId)
-            .Include(au => au.User)
-            .Include(au => au.Apartment)
-            .OrderBy(au => au.Apartment.Number)
-            .ToListAsync();
-
-        var result = new List<object>();
-        foreach (var member in members)
-        {
-            var roles = await _userManager.GetRolesAsync(member.User);
-            result.Add(new
-            {
-                userId = member.UserId,
-                name = member.User.Name,
-                email = member.User.Email,
-                apartmentNumber = member.Apartment.Number,
-                roles
-            });
-        }
-
-        return Ok(result);
-    }
+    public async Task<IActionResult> GetBuildingMembers() =>
+        Ok(await _userRoleService.GetBuildingMembersAsync(CurrentUserId));
 
     // PUT: Смяна на роля на потребител — само между Собственик/Живущ (Resident) и Касиер (Cashier).
-    // Домоуправител/Администратор роли не се раздават оттук (виж RoleNames.Assignable).
     [HttpPut("{id}/role")]
     public async Task<IActionResult> ChangeRole(string id, [FromBody] ChangeUserRoleDto dto)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        if (!RoleNames.Assignable.Contains(dto.Role))
-            return BadRequest(new { message = "Невалидна роля. Позволени стойности: Resident, Cashier." });
-
-        var targetUser = await _userManager.FindByIdAsync(id);
-        if (targetUser == null)
-            return NotFound(new { message = "Потребителят не е намерен." });
-
-        var currentRoles = await _userManager.GetRolesAsync(targetUser);
         var isAdministrator = User.IsInRole(RoleNames.Administrator);
+        await _userRoleService.ChangeRoleAsync(CurrentUserId, isAdministrator, id, dto.Role);
 
-        if (!isAdministrator)
-        {
-            // Домоуправителят не може да пипа Домоуправители/Администратори,
-            // и може да сменя роля само на живущи от собствената си сграда.
-            if (currentRoles.Contains(RoleNames.HouseManager) || currentRoles.Contains(RoleNames.Administrator))
-                return Forbid();
-
-            var managerId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-            var managedBuildingId = await _context.Buildings
-                .Where(b => b.ManagerId == managerId)
-                .Select(b => (int?)b.Id)
-                .FirstOrDefaultAsync();
-
-            if (managedBuildingId == null)
-                return NotFound(new { message = "Нямаш управлявана сграда." });
-
-            var belongsToBuilding = await _context.ApartmentUsers
-                .AnyAsync(au => au.UserId == id && au.Apartment.BuildingId == managedBuildingId);
-
-            if (!belongsToBuilding)
-                return Forbid();
-        }
-
-        if (currentRoles.Count > 0)
-            await _userManager.RemoveFromRolesAsync(targetUser, currentRoles);
-
-        await _userManager.AddToRoleAsync(targetUser, dto.Role);
-
-        return Ok(new { message = "Ролята е сменена.", userId = targetUser.Id, role = dto.Role });
+        return Ok(new { message = "Ролята е сменена.", userId = id, role = dto.Role });
     }
+
+    private string CurrentUserId =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 }
