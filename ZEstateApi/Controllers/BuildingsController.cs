@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ZEstate.Core.DTOs.Buildings;
+using ZEstate.Core.Interfaces;
 using ZEstate.Infrastructure;
 using ZEstate.Infrastructure.Data.Enums;
 using ZEstate.Infrastructure.Data.Models;
@@ -15,10 +16,12 @@ using ZEstateApi.Authorization;
 public class BuildingsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly INotificationService _notificationService;
 
-    public BuildingsController(ApplicationDbContext context)
+    public BuildingsController(ApplicationDbContext context, INotificationService notificationService)
     {
         _context = context;
+        _notificationService = notificationService;
     }
 
     // GET: Сградата, управлявана от текущия домоуправител
@@ -342,6 +345,13 @@ public class BuildingsController : ControllerBase
         });
 
         await _context.SaveChangesAsync();
+
+        await _notificationService.NotifyAsync(
+            joinRequest.UserId,
+            "Заявката ти е одобрена",
+            $"Заявката ти за апартамент {joinRequest.Apartment.Number} в {joinRequest.Building.Name} е одобрена.",
+            "/dashboard");
+
         return Ok(new { message = "Заявката е одобрена." });
     }
 
@@ -358,6 +368,13 @@ public class BuildingsController : ControllerBase
         joinRequest.RejectionReason = string.IsNullOrWhiteSpace(dto?.Reason) ? null : dto.Reason.Trim();
 
         await _context.SaveChangesAsync();
+
+        var message = joinRequest.RejectionReason != null
+            ? $"Заявката ти за апартамент {joinRequest.Apartment.Number} в {joinRequest.Building.Name} беше отхвърлена. Причина: {joinRequest.RejectionReason}"
+            : $"Заявката ти за апартамент {joinRequest.Apartment.Number} в {joinRequest.Building.Name} беше отхвърлена.";
+
+        await _notificationService.NotifyAsync(joinRequest.UserId, "Заявката ти беше отхвърлена", message, "/dashboard");
+
         return Ok(new { message = "Заявката е отхвърлена." });
     }
 
@@ -404,6 +421,8 @@ public class BuildingsController : ControllerBase
             return null;
 
         return await _context.JoinRequests
+            .Include(jr => jr.Building)
+            .Include(jr => jr.Apartment)
             .FirstOrDefaultAsync(jr => jr.Id == id
                                      && jr.BuildingId == building.Id
                                      && jr.Status == JoinRequestStatus.Pending);
