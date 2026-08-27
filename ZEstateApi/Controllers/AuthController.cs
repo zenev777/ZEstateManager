@@ -8,6 +8,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using ZEstate.Core.DTOs.Auth;
+using ZEstate.Core.Interfaces;
 using ZEstate.Infrastructure;
 using ZEstate.Infrastructure.Data.Enums;
 using ZEstate.Infrastructure.Data.IdentityModels;
@@ -20,15 +21,18 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
     private readonly ApplicationDbContext _context;
+    private readonly IEmailSender _emailSender;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
-        ApplicationDbContext context)
+        ApplicationDbContext context,
+        IEmailSender emailSender)
     {
         _userManager = userManager;
         _configuration = configuration;
         _context = context;
+        _emailSender = emailSender;
     }
 
     [HttpPost("login")]
@@ -305,6 +309,62 @@ public class AuthController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Заявката е изпратена отново." });
+    }
+
+    // POST: Изпраща имейл с линк за нулиране на паролата, ако имейлът съществува
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+
+        // Винаги връщаме един и същ отговор, за да не разкриваме дали имейлът съществува.
+        if (user != null && user.IsActive)
+        {
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
+            var resetLink = $"{frontendBaseUrl}/reset-password" +
+                             $"?email={Uri.EscapeDataString(dto.Email)}" +
+                             $"&token={Uri.EscapeDataString(token)}";
+
+            var body = $"""
+                <p>Здравей, {user.FirstName}!</p>
+                <p>Получихме заявка за нулиране на паролата на профила ти в ZEstate.
+                Ако не си я направил/а ти, просто игнорирай този имейл.</p>
+                <p><a href="{resetLink}">Нулирай паролата си</a></p>
+                <p>Линкът е валиден за ограничено време и може да се използва само веднъж.</p>
+                """;
+
+            await _emailSender.SendAsync(user.Email!, "Нулиране на парола — ZEstate", body);
+        }
+
+        return Ok(new { message = "Ако имейлът съществува в системата, ще получиш линк за нулиране на паролата." });
+    }
+
+    // POST: Задава нова парола по линка от forgot-password
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null)
+            return BadRequest(new { message = "Невалиден или изтекъл линк за нулиране на паролата." });
+
+        var result = await _userManager.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+        if (!result.Succeeded)
+        {
+            var isInvalidToken = result.Errors.Any(e => e.Code == "InvalidToken");
+            var message = isInvalidToken
+                ? "Невалиден или изтекъл линк за нулиране на паролата."
+                : string.Join(" ", result.Errors.Select(e => e.Description));
+            return BadRequest(new { message });
+        }
+
+        return Ok(new { message = "Паролата е сменена успешно." });
     }
 
     private static string GenerateInviteCode()

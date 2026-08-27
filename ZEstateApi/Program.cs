@@ -8,6 +8,7 @@ using ZEstate.Infrastructure;
 using ZEstate.Infrastructure.Data.DataConstants;
 using ZEstate.Infrastructure.Data.IdentityModels;
 using ZEstate.Infrastructure.Data.Repository;
+using ZEstate.Infrastructure.Services;
 using ZEstateApi.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +32,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IRepository, Repository>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>(options =>
