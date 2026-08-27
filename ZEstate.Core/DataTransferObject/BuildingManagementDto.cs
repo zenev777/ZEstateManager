@@ -56,3 +56,11 @@ public class RejectJoinRequestDto
     [MaxLength(300)]
     public string? Reason { get; set; }
 }
+
+public class UpdateQuorumThresholdDto
+{
+    // Minimum % of ideal parts that must vote for quorum. ЗУЕС default is 50.
+    [Required]
+    [Range(1, 100)]
+    public decimal QuorumThresholdPercent { get; set; }
+}

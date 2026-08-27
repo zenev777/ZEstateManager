@@ -165,6 +165,23 @@ public class BuildingsController : ControllerBase
         return Ok(log);
     }
 
+    // PUT: Смяна на прага за кворум (% идеални части) при гласувания. По подразбиране 50 (ЗУЕС).
+    [HttpPut("my/quorum-threshold")]
+    public async Task<IActionResult> UpdateQuorumThreshold([FromBody] UpdateQuorumThresholdDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var building = await GetManagedBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        building.QuorumThresholdPercent = dto.QuorumThresholdPercent;
+        await _context.SaveChangesAsync();
+
+        return Ok(BuildingResponse(building));
+    }
+
     // GET: Апартаментите в управляваната сграда + сбор на идеалните части
     [HttpGet("my/apartments")]
     public async Task<IActionResult> GetApartments()
@@ -387,7 +404,8 @@ public class BuildingsController : ControllerBase
         building.InviteCodeActive,
         building.InviteCodeExpiresAt,
         building.InviteCodeMaxUses,
-        building.InviteCodeUseCount
+        building.InviteCodeUseCount,
+        building.QuorumThresholdPercent
     };
 
     private static string GenerateInviteCode()
