@@ -17,11 +17,16 @@ public class FeesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IObligationGenerationService _obligationGenerationService;
+    private readonly IObligationStatusService _obligationStatusService;
 
-    public FeesController(ApplicationDbContext context, IObligationGenerationService obligationGenerationService)
+    public FeesController(
+        ApplicationDbContext context,
+        IObligationGenerationService obligationGenerationService,
+        IObligationStatusService obligationStatusService)
     {
         _context = context;
         _obligationGenerationService = obligationGenerationService;
+        _obligationStatusService = obligationStatusService;
     }
 
     // GET: Всички такси на управляваната сграда
@@ -168,6 +173,44 @@ public class FeesController : ControllerBase
             .ToListAsync();
 
         return Ok(obligations);
+    }
+
+    // GET: Справка за домоуправителя - брой задължения по статус за цялата сграда
+    [HttpGet("obligations/summary")]
+    public async Task<IActionResult> GetObligationsSummary()
+    {
+        var building = await GetManagedBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        var counts = await _context.Obligations
+            .Where(o => o.Apartment.BuildingId == building.Id)
+            .GroupBy(o => o.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count(), Total = g.Sum(o => o.Amount) })
+            .ToListAsync();
+
+        object Summarize(ObligationStatus status)
+        {
+            var match = counts.FirstOrDefault(c => c.Status == status);
+            return new { count = match?.Count ?? 0, total = match?.Total ?? 0m };
+        }
+
+        return Ok(new
+        {
+            pending = Summarize(ObligationStatus.Pending),
+            partiallyPaid = Summarize(ObligationStatus.PartiallyPaid),
+            paid = Summarize(ObligationStatus.Paid),
+            overdue = Summarize(ObligationStatus.Overdue)
+        });
+    }
+
+    // POST: Ръчно стартиране на просрочване (демо/тест удобство - същата логика, която
+    // фоновата задача пуска автоматично всеки ден)
+    [HttpPost("mark-overdue")]
+    public async Task<IActionResult> MarkOverdue()
+    {
+        var count = await _obligationStatusService.MarkOverdueAsync();
+        return Ok(new { markedOverdue = count });
     }
 
     private static object FeeResponse(Fee fee) => new
