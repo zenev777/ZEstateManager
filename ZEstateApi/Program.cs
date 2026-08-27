@@ -125,6 +125,13 @@ using (var scope = app.Services.CreateScope())
         if (!await roleManager.RoleExistsAsync(roleName))
             await roleManager.CreateAsync(new ApplicationRole { Name = roleName });
     }
+
+    // Off by default everywhere - only seeds a QA login fixture when the host
+    // explicitly sets "Seed:QaFixture" (e.g. Seed__QaFixture=true on Render).
+    if (builder.Configuration.GetValue<bool>("Seed:QaFixture"))
+    {
+        await QaSeedData.SeedAsync(scope.ServiceProvider);
+    }
 }
 
 // Configure the HTTP request pipeline.
