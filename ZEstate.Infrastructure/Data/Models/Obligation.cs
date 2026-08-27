@@ -46,6 +46,9 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("Due date for the obligation")]
         public DateTime? DueDate { get; set; }
 
+        [Comment("First day of the month this obligation was generated for (Monthly fees only, used to prevent duplicate generation); null for OneTime fees")]
+        public DateTime? Period { get; set; }
+
         public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     }
 

@@ -48,6 +48,10 @@ namespace ZEstate.Infrastructure.Data.Models
         public FeeType Type { get; set; }
 
         [Required]
+        [Comment("How often the fee recurs: OneTime or Monthly")]
+        public FeeFrequency Frequency { get; set; } = FeeFrequency.Monthly;
+
+        [Required]
         [Comment("Date from which the fee is active")]
         public DateTime DateFrom { get; set; }
 
