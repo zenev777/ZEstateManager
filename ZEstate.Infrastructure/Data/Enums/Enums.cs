@@ -71,4 +71,10 @@ namespace ZEstate.Infrastructure.Data.Enums
         Approved,
         Rejected
     }
+    public enum InviteCodeAction
+    {
+        Regenerated,
+        Revoked,
+        LimitsUpdated
+    }
 }

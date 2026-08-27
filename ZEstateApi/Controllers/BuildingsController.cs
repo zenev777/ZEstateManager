@@ -29,13 +29,7 @@ public class BuildingsController : ControllerBase
         if (building == null)
             return NotFound(new { message = "Нямаш управлявана сграда." });
 
-        return Ok(new
-        {
-            building.Id,
-            building.Name,
-            building.Address,
-            building.InviteCode
-        });
+        return Ok(BuildingResponse(building));
     }
 
     // PUT: Редакция на име/адрес на управляваната сграда
@@ -54,13 +48,118 @@ public class BuildingsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        return Ok(new
+        return Ok(BuildingResponse(building));
+    }
+
+    // POST: Regenerates the invite code - the old one becomes invalid immediately
+    [HttpPost("my/invite-code/regenerate")]
+    public async Task<IActionResult> RegenerateInviteCode()
+    {
+        var building = await GetManagedBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        var oldCode = building.InviteCode;
+
+        string newCode;
+        do
         {
-            building.Id,
-            building.Name,
-            building.Address,
-            building.InviteCode
+            newCode = GenerateInviteCode();
+        } while (await _context.Buildings.AnyAsync(b => b.InviteCode == newCode));
+
+        building.InviteCode = newCode;
+        building.InviteCodeActive = true;
+        building.InviteCodeUseCount = 0;
+
+        _context.InviteCodeLogs.Add(new InviteCodeLog
+        {
+            BuildingId = building.Id,
+            ChangedByUserId = CurrentUserId,
+            Action = InviteCodeAction.Regenerated,
+            OldCode = oldCode,
+            NewCode = newCode
         });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(BuildingResponse(building));
+    }
+
+    // POST: Revokes the code without issuing a new one - pauses new registrations
+    [HttpPost("my/invite-code/revoke")]
+    public async Task<IActionResult> RevokeInviteCode()
+    {
+        var building = await GetManagedBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        building.InviteCodeActive = false;
+
+        _context.InviteCodeLogs.Add(new InviteCodeLog
+        {
+            BuildingId = building.Id,
+            ChangedByUserId = CurrentUserId,
+            Action = InviteCodeAction.Revoked,
+            OldCode = building.InviteCode
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(BuildingResponse(building));
+    }
+
+    // PUT: Sets an optional expiration date and/or usage limit for the code
+    [HttpPut("my/invite-code/limits")]
+    public async Task<IActionResult> UpdateInviteCodeLimits([FromBody] InviteCodeLimitsDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var building = await GetManagedBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        building.InviteCodeExpiresAt = dto.ExpiresAt;
+        building.InviteCodeMaxUses = dto.MaxUses;
+
+        _context.InviteCodeLogs.Add(new InviteCodeLog
+        {
+            BuildingId = building.Id,
+            ChangedByUserId = CurrentUserId,
+            Action = InviteCodeAction.LimitsUpdated,
+            OldCode = building.InviteCode,
+            NewCode = building.InviteCode
+        });
+
+        await _context.SaveChangesAsync();
+
+        return Ok(BuildingResponse(building));
+    }
+
+    // GET: History of changes made to the invite code
+    [HttpGet("my/invite-code/log")]
+    public async Task<IActionResult> GetInviteCodeLog()
+    {
+        var building = await GetManagedBuildingAsync();
+        if (building == null)
+            return NotFound(new { message = "Нямаш управлявана сграда." });
+
+        var log = await _context.InviteCodeLogs
+            .Where(l => l.BuildingId == building.Id)
+            .Include(l => l.ChangedBy)
+            .OrderByDescending(l => l.ChangedAt)
+            .Select(l => new
+            {
+                l.Id,
+                l.Action,
+                l.OldCode,
+                l.NewCode,
+                l.ChangedAt,
+                ChangedByName = l.ChangedBy.Name
+            })
+            .ToListAsync();
+
+        return Ok(log);
     }
 
     // GET: Апартаментите в управляваната сграда + сбор на идеалните части
@@ -259,6 +358,26 @@ public class BuildingsController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Заявката е отхвърлена." });
+    }
+
+    private static object BuildingResponse(Building building) => new
+    {
+        building.Id,
+        building.Name,
+        building.Address,
+        building.InviteCode,
+        building.InviteCodeActive,
+        building.InviteCodeExpiresAt,
+        building.InviteCodeMaxUses,
+        building.InviteCodeUseCount
+    };
+
+    private static string GenerateInviteCode()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        var random = new Random();
+        return new string(Enumerable.Range(0, 8)
+            .Select(_ => chars[random.Next(chars.Length)]).ToArray());
     }
 
     private string CurrentUserId =>

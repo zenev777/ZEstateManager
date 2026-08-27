@@ -35,6 +35,20 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("Unique invite code for residents to join")]
         public string InviteCode { get; set; } = string.Empty;
 
+        [Required]
+        [Comment("Whether the invite code currently accepts new registrations")]
+        public bool InviteCodeActive { get; set; } = true;
+
+        [Comment("Optional expiration date/time for the invite code")]
+        public DateTime? InviteCodeExpiresAt { get; set; }
+
+        [Comment("Optional maximum number of times the invite code can be used")]
+        public int? InviteCodeMaxUses { get; set; }
+
+        [Required]
+        [Comment("Number of times the current invite code has been used")]
+        public int InviteCodeUseCount { get; set; } = 0;
+
         [Comment("The house manager responsible for this building")]
         public string? ManagerId { get; set; }
 
@@ -46,5 +60,6 @@ namespace ZEstate.Infrastructure.Data.Models
         public ICollection<Meeting> Meetings { get; set; } = new List<Meeting>();
         public ICollection<Repair> Repairs { get; set; } = new List<Repair>();
         public ICollection<Document> Documents { get; set; } = new List<Document>();
+        public ICollection<InviteCodeLog> InviteCodeLogs { get; set; } = new List<InviteCodeLog>();
     }
 }

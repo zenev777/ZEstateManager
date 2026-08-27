@@ -41,3 +41,12 @@ public class UpdateApartmentDto
     [Range(0, 100)]
     public decimal IdealParts { get; set; }
 }
+
+public class InviteCodeLimitsDto
+{
+    // null means no limit
+    public DateTime? ExpiresAt { get; set; }
+
+    [Range(1, int.MaxValue)]
+    public int? MaxUses { get; set; }
+}
