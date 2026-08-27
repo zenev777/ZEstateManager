@@ -311,7 +311,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Заявката е изпратена отново." });
     }
 
-    // POST: Изпраща имейл с линк за нулиране на паролата, ако имейлът съществува
+    // POST: Sends an email with a password-reset link if the email exists
     [HttpPost("forgot-password")]
     public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
     {
@@ -320,7 +320,7 @@ public class AuthController : ControllerBase
 
         var user = await _userManager.FindByEmailAsync(dto.Email);
 
-        // Винаги връщаме един и същ отговор, за да не разкриваме дали имейлът съществува.
+        // Always return the same response so we don't reveal whether the email exists.
         if (user != null && user.IsActive)
         {
             var token = await _userManager.GeneratePasswordResetTokenAsync(user);
@@ -343,7 +343,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "Ако имейлът съществува в системата, ще получиш линк за нулиране на паролата." });
     }
 
-    // POST: Задава нова парола по линка от forgot-password
+    // POST: Sets a new password using the link from forgot-password
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
     {
