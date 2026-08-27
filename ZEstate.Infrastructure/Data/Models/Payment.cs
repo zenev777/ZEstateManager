@@ -38,5 +38,9 @@ namespace ZEstate.Infrastructure.Data.Models
         [MaxLength(TransactionIdMaxLength)]
         [Comment("Stripe transaction identifier, null if paid manually")]
         public string? TransactionId { get; set; }
+
+        [MaxLength(300)]
+        [Comment("Optional note entered when recording the payment")]
+        public string? Note { get; set; }
     }
 }
