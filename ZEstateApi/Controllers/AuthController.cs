@@ -78,6 +78,10 @@ public class AuthController : ControllerBase
             if (joinTargetBuilding == null)
                 return BadRequest(new { message = "Невалиден код за сграда." });
 
+            var inviteCodeError = GetInviteCodeError(joinTargetBuilding);
+            if (inviteCodeError != null)
+                return BadRequest(new { message = inviteCodeError });
+
             if (!Enum.TryParse<ApartmentRole>(dto.JoinBuilding.Status, true, out _))
                 return BadRequest(new { message = "Невалиден статут." });
         }
@@ -179,6 +183,8 @@ public class AuthController : ControllerBase
                 CreatedAt = DateTime.UtcNow
             });
 
+            joinTargetBuilding.InviteCodeUseCount++;
+
             await _context.SaveChangesAsync();
         }
 
@@ -204,6 +210,10 @@ public class AuthController : ControllerBase
         if (building == null)
             return NotFound(new { message = "Невалиден код." });
 
+        var inviteCodeError = GetInviteCodeError(building);
+        if (inviteCodeError != null)
+            return BadRequest(new { message = inviteCodeError });
+
         return Ok(new
         {
             building.Id,
@@ -211,6 +221,21 @@ public class AuthController : ControllerBase
             building.Address,
             building.InviteCode
         });
+    }
+
+    // Проверява дали кодът за покана още е активен, неизтекъл и под лимита на използвания
+    private static string? GetInviteCodeError(Building building)
+    {
+        if (!building.InviteCodeActive)
+            return "Кодът за покана е анулиран от домоуправителя.";
+
+        if (building.InviteCodeExpiresAt.HasValue && building.InviteCodeExpiresAt.Value < DateTime.UtcNow)
+            return "Кодът за покана е изтекъл.";
+
+        if (building.InviteCodeMaxUses.HasValue && building.InviteCodeUseCount >= building.InviteCodeMaxUses.Value)
+            return "Кодът за покана е достигнал лимита си на използване.";
+
+        return null;
     }
 
     // GET: Статус на текущия потребител — за резидента показва статуса на заявката му
@@ -270,6 +295,10 @@ public class AuthController : ControllerBase
 
         if (building == null)
             return BadRequest(new { message = "Невалиден код за сграда." });
+
+        var inviteCodeError = GetInviteCodeError(building);
+        if (inviteCodeError != null)
+            return BadRequest(new { message = inviteCodeError });
 
         if (!Enum.TryParse<ApartmentRole>(dto.Status, true, out var requestedRole))
             return BadRequest(new { message = "Невалиден статут." });

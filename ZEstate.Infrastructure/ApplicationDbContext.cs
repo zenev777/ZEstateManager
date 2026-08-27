@@ -30,5 +30,6 @@ namespace ZEstate.Infrastructure
         public DbSet<Repair> Repairs { get; set; }
         public DbSet<Vote> Votes { get; set; }
         public DbSet<Document> Documents { get; set; }
+        public DbSet<InviteCodeLog> InviteCodeLogs { get; set; }
     }
 }
