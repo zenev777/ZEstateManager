@@ -272,7 +272,8 @@ public class AuthController : ControllerBase
             membershipStatus = latest.Status.ToString(),
             buildingName = latest.Building.Name,
             apartmentNumber = latest.Apartment.Number,
-            canRetry
+            canRetry,
+            rejectionReason = latest.RejectionReason
         });
     }
 

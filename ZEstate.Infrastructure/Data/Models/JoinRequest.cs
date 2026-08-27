@@ -56,4 +56,8 @@ public class JoinRequest
 
     [Comment("Date when the request was reviewed")]
     public DateTime? ReviewedAt { get; set; }
+
+    [MaxLength(NotesMaxLength)]
+    [Comment("Optional reason the house manager gave when rejecting the request")]
+    public string? RejectionReason { get; set; }
 }
