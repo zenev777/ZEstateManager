@@ -82,4 +82,9 @@ namespace ZEstate.Infrastructure.Data.Enums
         OneTime,
         Monthly
     }
+    public enum DebtHandling
+    {
+        TransfersToNewOwner,
+        StaysWithPreviousOwner
+    }
 }

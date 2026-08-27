@@ -312,6 +312,111 @@ public class BuildingsController : ControllerBase
         return Ok(new { message = "Апартаментът е изтрит." });
     }
 
+    // POST: Маркиране на апартамент като прехвърлен - старият собственик губи достъп,
+    // а новият се регистрира отделно през кода за покана на сградата (същия номер
+    // апартамент), минавайки през обичайния поток за присъединяване/одобрение.
+    [HttpPost("my/apartments/{id:int}/transfer")]
+    public async Task<IActionResult> TransferApartment(int id, [FromBody] TransferApartmentDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        if (!Enum.TryParse<DebtHandling>(dto.DebtHandling, true, out var debtHandling))
+            return BadRequest(new { message = "Невалидна стойност. Позволени: TransfersToNewOwner, StaysWithPreviousOwner." });
+
+        var apartment = await GetOwnedApartmentAsync(id);
+        if (apartment == null)
+            return NotFound(new { message = "Апартаментът не е намерен." });
+
+        var activeMembers = await _context.ApartmentUsers
+            .Where(au => au.ApartmentId == id && au.IsActive)
+            .Include(au => au.User)
+            .ToListAsync();
+
+        if (activeMembers.Count == 0)
+            return BadRequest(new { message = "Апартаментът няма активен собственик за прехвърляне." });
+
+        var outstandingObligations = await _context.Obligations
+            .Where(o => o.ApartmentId == id
+                     && (o.Status == ObligationStatus.Pending || o.Status == ObligationStatus.PartiallyPaid || o.Status == ObligationStatus.Overdue))
+            .Include(o => o.Payments)
+            .ToListAsync();
+
+        var outstandingBalance = outstandingObligations.Sum(o => o.Amount - o.Payments.Sum(p => p.Amount));
+
+        // With co-owners this picks one as "the" previous owner for the audit log;
+        // every active member still loses access below regardless.
+        var previousOwner = activeMembers.FirstOrDefault(au => au.Role == ApartmentRole.Owner) ?? activeMembers[0];
+
+        foreach (var member in activeMembers)
+        {
+            member.IsActive = false;
+        }
+
+        if (debtHandling == DebtHandling.StaysWithPreviousOwner)
+        {
+            foreach (var obligation in outstandingObligations)
+            {
+                obligation.PreviousOwnerUserId = previousOwner.UserId;
+            }
+        }
+
+        _context.ApartmentTransferLogs.Add(new ApartmentTransferLog
+        {
+            ApartmentId = id,
+            PreviousOwnerUserId = previousOwner.UserId,
+            TransferredByUserId = CurrentUserId,
+            DebtHandling = debtHandling,
+            OutstandingBalanceAtTransfer = outstandingBalance
+        });
+
+        await _context.SaveChangesAsync();
+
+        foreach (var member in activeMembers)
+        {
+            await _notificationService.NotifyAsync(
+                member.UserId,
+                "Достъпът ти беше прекратен",
+                $"Домоуправителят маркира апартамент {apartment.Number} като прехвърлен. Достъпът ти до сградата е деактивиран.",
+                null,
+                allowEmail: true);
+        }
+
+        return Ok(new
+        {
+            message = "Апартаментът е маркиран като прехвърлен.",
+            outstandingBalance,
+            debtHandling
+        });
+    }
+
+    // GET: История на прехвърлянията на апартамент - за одиторски цели
+    [HttpGet("my/apartments/{id:int}/transfers")]
+    public async Task<IActionResult> GetApartmentTransfers(int id)
+    {
+        var apartment = await GetOwnedApartmentAsync(id);
+        if (apartment == null)
+            return NotFound(new { message = "Апартаментът не е намерен." });
+
+        var transfers = await _context.ApartmentTransferLogs
+            .Where(t => t.ApartmentId == id)
+            .Include(t => t.PreviousOwner)
+            .Include(t => t.TransferredBy)
+            .OrderByDescending(t => t.TransferredAt)
+            .Select(t => new
+            {
+                t.Id,
+                PreviousOwnerName = t.PreviousOwner != null ? t.PreviousOwner.Name : null,
+                TransferredByName = t.TransferredBy.Name,
+                t.DebtHandling,
+                t.OutstandingBalanceAtTransfer,
+                t.TransferredAt
+            })
+            .ToListAsync();
+
+        return Ok(transfers);
+    }
+
     // GET: Чакащи заявки за присъединяване към сградата
     [HttpGet("my/join-requests")]
     public async Task<IActionResult> GetJoinRequests()

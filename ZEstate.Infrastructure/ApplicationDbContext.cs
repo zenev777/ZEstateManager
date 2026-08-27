@@ -40,5 +40,6 @@ namespace ZEstate.Infrastructure
         public DbSet<InviteCodeLog> InviteCodeLogs { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
+        public DbSet<ApartmentTransferLog> ApartmentTransferLogs { get; set; }
     }
 }

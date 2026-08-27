@@ -64,3 +64,10 @@ public class UpdateQuorumThresholdDto
     [Range(1, 100)]
     public decimal QuorumThresholdPercent { get; set; }
 }
+
+public class TransferApartmentDto
+{
+    // "TransfersToNewOwner" | "StaysWithPreviousOwner"
+    [Required]
+    public string DebtHandling { get; set; } = "TransfersToNewOwner";
+}
