@@ -34,8 +34,11 @@ namespace ZEstate.Infrastructure.Data.Models
         public string? Description { get; set; }
 
         [Required]
-        [Comment("Repair budget")]
+        [Comment("Planned repair budget")]
         public decimal Budget { get; set; }
+
+        [Comment("Actual cost once known; falls back to Budget for cost allocation until set")]
+        public decimal? ActualCost { get; set; }
 
         [Required]
         [Comment("Current repair status")]
