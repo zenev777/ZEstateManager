@@ -27,6 +27,13 @@ namespace ZEstate.Infrastructure.Data.Enums
         Manual,
         Stripe
     }
+    // Which physical/virtual "till" money actually sits in - drives the two balance
+    // tiles and internal transfers between them.
+    public enum CashAccountType
+    {
+        Cash,
+        Bank
+    }
     public enum ObligationStatus
     {
         Pending,
