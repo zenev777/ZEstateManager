@@ -201,7 +201,7 @@ public class PaymentServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateCheckoutSessionAsync_Valid_CallsGatewayWithRemainingBalance()
+    public async Task CreateCheckoutSessionAsync_Valid_ChargesRemainingBalanceInEur()
     {
         var (building, apartment) = AddManagedBuildingWithApartment();
         building.Iban = "BG80BNBG96611020345678";
@@ -216,7 +216,7 @@ public class PaymentServiceTests : IDisposable
         await _context.SaveChangesAsync();
 
         _paymentGateway
-            .Setup(g => g.CreateCheckoutSessionAsync(30, "bgn", "Monthly fee", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .Setup(g => g.CreateCheckoutSessionAsync(30, "eur", "Monthly fee", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
             .ReturnsAsync(new CheckoutSessionResult("sess_1", "https://checkout.stripe.com/sess_1"));
 
         var result = await _service.CreateCheckoutSessionAsync("res1", obligation.Id);
