@@ -59,7 +59,11 @@ public class StripePaymentGateway : IPaymentGateway
         Event stripeEvent;
         try
         {
-            stripeEvent = EventUtility.ConstructEvent(payload, signatureHeader, _webhookSecret);
+            // The Stripe account's API version can be newer than what this Stripe.net
+            // release recognizes (Stripe rolls new API versions faster than the SDK
+            // ships). throwOnApiVersionMismatch: false keeps signature verification
+            // strict while tolerating that skew instead of hard-failing the webhook.
+            stripeEvent = EventUtility.ConstructEvent(payload, signatureHeader, _webhookSecret, throwOnApiVersionMismatch: false);
         }
         catch (StripeException ex)
         {
