@@ -4,7 +4,8 @@ namespace ZEstate.Core.Interfaces
 {
     public interface IRepairService
     {
-        Task<List<RepairListItemDto>> GetRepairsAsync(string managerId);
+        // Available to any building member (read-only); everything else stays manager-only.
+        Task<List<RepairListItemDto>> GetRepairsAsync(string userId);
         Task<RepairResponseDto> CreateRepairAsync(string managerId, CreateRepairDto dto);
         Task<RepairResponseDto> UpdateRepairAsync(string managerId, int repairId, UpdateRepairDto dto);
         Task DeleteRepairAsync(string managerId, int repairId);
