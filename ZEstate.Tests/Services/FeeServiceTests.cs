@@ -164,6 +164,52 @@ public class FeeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetMyObligationsAsync_NoApartmentMembership_ReturnsEmptyList()
+    {
+        var result = await _service.GetMyObligationsAsync("stranger");
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetMyObligationsAsync_ReturnsOnlyCallersApartmentObligations()
+    {
+        var building = AddManagedBuilding();
+        var myApartment = new Apartment { BuildingId = building.Id, Number = "1", Floor = 1, IdealParts = 10, Budget = 0 };
+        var otherApartment = new Apartment { BuildingId = building.Id, Number = "2", Floor = 1, IdealParts = 10, Budget = 0 };
+        _context.Apartments.AddRange(myApartment, otherApartment);
+        var fee = new Fee { BuildingId = building.Id, Title = "Maintenance", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = myApartment.Id, UserId = "res1", IsActive = true });
+        _context.Obligations.AddRange(
+            new Obligation { ApartmentId = myApartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Pending },
+            new Obligation { ApartmentId = otherApartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Pending });
+        await _context.SaveChangesAsync();
+
+        var result = await _service.GetMyObligationsAsync("res1");
+
+        Assert.Single(result);
+        Assert.Equal("1", result[0].ApartmentNumber);
+    }
+
+    [Fact]
+    public async Task GetMyObligationsAsync_InactiveMembership_ReturnsEmptyList()
+    {
+        var building = AddManagedBuilding();
+        var apartment = new Apartment { BuildingId = building.Id, Number = "1", Floor = 1, IdealParts = 10, Budget = 0 };
+        _context.Apartments.Add(apartment);
+        await _context.SaveChangesAsync();
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = false });
+        await _context.SaveChangesAsync();
+
+        var result = await _service.GetMyObligationsAsync("res1");
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public async Task MarkOverdueAsync_DelegatesToObligationStatusService()
     {
         _status.Setup(s => s.MarkOverdueAsync()).ReturnsAsync(4);

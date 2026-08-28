@@ -10,6 +10,10 @@ namespace ZEstate.Core.Interfaces
         Task DeleteFeeAsync(string managerId, int feeId);
         Task<List<ObligationSummaryDto>> GetObligationsAsync(string managerId);
         Task<ObligationsSummaryDto> GetObligationsSummaryAsync(string managerId);
+
+        // Any building member's own obligations (not manager-scoped) - empty list if the
+        // caller has no active apartment membership, rather than a NotFound/Forbidden.
+        Task<List<ObligationSummaryDto>> GetMyObligationsAsync(string userId);
         Task<ObligationGenerationResult> GenerateObligationsAsync();
         Task<int> MarkOverdueAsync();
     }

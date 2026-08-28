@@ -155,6 +155,36 @@ public class FeeService : IFeeService
         };
     }
 
+    public async Task<List<ObligationSummaryDto>> GetMyObligationsAsync(string userId)
+    {
+        var apartmentId = await _context.ApartmentUsers
+            .Where(au => au.UserId == userId && au.IsActive)
+            .Select(au => (int?)au.ApartmentId)
+            .FirstOrDefaultAsync();
+
+        if (apartmentId == null)
+            return new List<ObligationSummaryDto>();
+
+        var obligations = await _context.Obligations
+            .Where(o => o.ApartmentId == apartmentId.Value)
+            .Include(o => o.Apartment)
+            .Include(o => o.Fee)
+            .OrderByDescending(o => o.DateCreated)
+            .ToListAsync();
+
+        return obligations.Select(o => new ObligationSummaryDto
+        {
+            Id = o.Id,
+            ApartmentNumber = o.Apartment.Number,
+            FeeTitle = o.Fee.Title,
+            Amount = o.Amount,
+            Status = (int)o.Status,
+            Period = o.Period,
+            DueDate = o.DueDate,
+            DateCreated = o.DateCreated
+        }).ToList();
+    }
+
     public Task<ObligationGenerationResult> GenerateObligationsAsync() =>
         _obligationGenerationService.GenerateForCurrentPeriodAsync();
 
