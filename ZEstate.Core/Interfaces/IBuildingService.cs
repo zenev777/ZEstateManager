@@ -3,9 +3,13 @@ using ZEstate.Core.DTOs.Buildings;
 namespace ZEstate.Core.Interfaces
 {
     public record ApartmentTransferResult(decimal OutstandingBalance, string DebtHandling);
+    public record BuildingRegisterExportResult(byte[] Content, string FileName);
 
     public interface IBuildingService
     {
+        // Консолидиран регистър на собствениците/живущите (чл. 7, чл. 23 ЗУЕС).
+        Task<List<BuildingRegisterEntryDto>> GetRegisterAsync(string managerId);
+        Task<BuildingRegisterExportResult> ExportRegisterAsync(string managerId);
         Task<BuildingSummaryDto> GetMyBuildingAsync(string managerId);
         Task<BuildingSummaryDto> UpdateMyBuildingAsync(string managerId, UpdateBuildingDto dto);
         Task<BuildingSummaryDto> UpdateIbanAsync(string managerId, string iban);

@@ -131,6 +131,19 @@ public class BuildingsController : ControllerBase
     public async Task<IActionResult> GetApartmentTransfers(int id) =>
         Ok(await _buildingService.GetApartmentTransfersAsync(CurrentUserId, id));
 
+    // GET: Консолидиран регистър на собствениците/живущите (чл. 7, чл. 23 ЗУЕС)
+    [HttpGet("my/register")]
+    public async Task<IActionResult> GetRegister() =>
+        Ok(await _buildingService.GetRegisterAsync(CurrentUserId));
+
+    // GET: Износ на регистъра като CSV (отваря се директно в Excel)
+    [HttpGet("my/register/export")]
+    public async Task<IActionResult> ExportRegister()
+    {
+        var result = await _buildingService.ExportRegisterAsync(CurrentUserId);
+        return File(result.Content, "text/csv", result.FileName);
+    }
+
     // GET: Чакащи заявки за присъединяване към сградата
     [HttpGet("my/join-requests")]
     public async Task<IActionResult> GetJoinRequests() =>
