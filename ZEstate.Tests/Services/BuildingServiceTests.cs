@@ -374,4 +374,74 @@ public class BuildingServiceTests : IDisposable
 
         Assert.Null(_context.JoinRequests.Single().RejectionReason);
     }
+
+    [Fact]
+    public async Task GetRegisterAsync_NoManagedBuilding_ThrowsNotFound()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() => _service.GetRegisterAsync("stranger"));
+    }
+
+    [Fact]
+    public async Task GetRegisterAsync_GroupsActiveMembersByApartmentAndExcludesInactive()
+    {
+        // Filtered Include (ApartmentUsers.Where(...)) isn't honored by the InMemory
+        // provider, so this needs a real relational provider - see CreateSqliteContext.
+        using var context = TestHelpers.CreateSqliteContext(out var connection);
+        using var _conn = connection;
+        var service = new BuildingService(context, _notifications.Object);
+
+        // Building.ManagerId is a real FK under Sqlite (unlike the InMemory provider).
+        context.Users.Add(new ApplicationUser { Id = ManagerId, FirstName = "M", LastName = "Gr", Email = "mgr@b.com", UserName = "mgr@b.com" });
+        await context.SaveChangesAsync();
+
+        var building = new Building { Name = "B", Address = "A", InviteCode = "CODE001", ManagerId = ManagerId };
+        context.Buildings.Add(building);
+        await context.SaveChangesAsync();
+
+        var apartment = new Apartment { BuildingId = building.Id, Number = "12", Floor = 3, IdealParts = 8.5m, Budget = 0 };
+        context.Apartments.Add(apartment);
+        await context.SaveChangesAsync();
+
+        context.Users.Add(new ApplicationUser { Id = "owner1", FirstName = "Иван", LastName = "Петров", Email = "i@p.com", UserName = "i@p.com" });
+        context.Users.Add(new ApplicationUser { Id = "res1", FirstName = "Мария", LastName = "Иванова", Email = "m@i.com", UserName = "m@i.com" });
+        context.Users.Add(new ApplicationUser { Id = "gone1", FirstName = "Стар", LastName = "Живущ", Email = "s@z.com", UserName = "s@z.com" });
+        await context.SaveChangesAsync();
+
+        context.ApartmentUsers.AddRange(
+            new ApartmentUser { ApartmentId = apartment.Id, UserId = "owner1", Role = ApartmentRole.Owner, IsActive = true, JoinedAt = new DateTime(2024, 1, 1) },
+            new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", Role = ApartmentRole.Resident, IsActive = true, JoinedAt = new DateTime(2024, 6, 1) },
+            new ApartmentUser { ApartmentId = apartment.Id, UserId = "gone1", Role = ApartmentRole.Resident, IsActive = false, JoinedAt = new DateTime(2020, 1, 1) });
+        await context.SaveChangesAsync();
+
+        var result = await service.GetRegisterAsync(ManagerId);
+
+        var entry = Assert.Single(result);
+        Assert.Equal("12", entry.ApartmentNumber);
+        Assert.Equal(3, entry.Floor);
+        Assert.Equal(8.5m, entry.IdealParts);
+        Assert.Equal(2, entry.Members.Count);
+        Assert.DoesNotContain(entry.Members, m => m.Name.Contains("Живущ"));
+        Assert.Contains(entry.Members, m => m.Role == (int)ApartmentRole.Owner);
+    }
+
+    [Fact]
+    public async Task ExportRegisterAsync_ReturnsCsvWithHeaderAndRows()
+    {
+        var building = AddManagedBuilding();
+        var apartment = new Apartment { BuildingId = building.Id, Number = "1", Floor = 1, IdealParts = 10, Budget = 0 };
+        _context.Apartments.Add(apartment);
+        await _context.SaveChangesAsync();
+
+        _context.Users.Add(new ApplicationUser { Id = "owner1", FirstName = "Иван", LastName = "Петров", Email = "i@p.com", UserName = "i@p.com" });
+        await _context.SaveChangesAsync();
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "owner1", Role = ApartmentRole.Owner, IsActive = true });
+        await _context.SaveChangesAsync();
+
+        var result = await _service.ExportRegisterAsync(ManagerId);
+
+        var text = System.Text.Encoding.UTF8.GetString(result.Content);
+        Assert.Contains("Апартамент,Етаж,Идеални части,Име,Имейл,Роля,Дата на регистрация", text);
+        Assert.Contains("Иван Петров", text);
+        Assert.EndsWith(".csv", result.FileName);
+    }
 }

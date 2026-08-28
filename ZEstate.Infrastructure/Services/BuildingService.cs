@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 using ZEstate.Core.DTOs.Buildings;
 using ZEstate.Core.Exceptions;
 using ZEstate.Core.Interfaces;
@@ -21,6 +23,43 @@ public class BuildingService : IBuildingService
 
     public async Task<BuildingSummaryDto> GetMyBuildingAsync(string managerId) =>
         ToDto(await GetManagedBuildingOrThrowAsync(managerId));
+
+    public async Task<List<BuildingRegisterEntryDto>> GetRegisterAsync(string managerId)
+    {
+        var building = await GetManagedBuildingOrThrowAsync(managerId);
+        var apartments = await LoadRegisterApartmentsAsync(building.Id);
+
+        return apartments.Select(ToRegisterEntryDto).ToList();
+    }
+
+    public async Task<BuildingRegisterExportResult> ExportRegisterAsync(string managerId)
+    {
+        var building = await GetManagedBuildingOrThrowAsync(managerId);
+        var apartments = await LoadRegisterApartmentsAsync(building.Id);
+
+        var csv = new StringBuilder();
+        csv.AppendLine("Апартамент,Етаж,Идеални части,Име,Имейл,Роля,Дата на регистрация");
+
+        foreach (var apartment in apartments)
+        {
+            foreach (var member in apartment.ApartmentUsers)
+            {
+                csv.AppendLine(string.Join(",",
+                    CsvEscape(apartment.Number),
+                    apartment.Floor.ToString(CultureInfo.InvariantCulture),
+                    apartment.IdealParts.ToString(CultureInfo.InvariantCulture),
+                    CsvEscape(member.User.Name),
+                    CsvEscape(member.User.Email ?? string.Empty),
+                    CsvEscape(RoleLabel(member.Role)),
+                    member.JoinedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+            }
+        }
+
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
+        var fileName = $"building-register_{building.Name}_{DateTime.UtcNow:yyyy-MM-dd}.csv";
+
+        return new BuildingRegisterExportResult(bytes, fileName);
+    }
 
     public async Task<BuildingSummaryDto> UpdateMyBuildingAsync(string managerId, UpdateBuildingDto dto)
     {
@@ -413,6 +452,47 @@ public class BuildingService : IBuildingService
         return new string(Enumerable.Range(0, 8)
             .Select(_ => chars[random.Next(chars.Length)]).ToArray());
     }
+
+    // AsNoTracking matters here beyond the usual read-only-query optimization: with a
+    // tracking query, EF's navigation fixup attaches any ApartmentUser already tracked
+    // in this context instance (e.g. just inserted earlier in the same scope) to the
+    // collection regardless of the IsActive filter below, silently defeating it.
+    private async Task<List<Apartment>> LoadRegisterApartmentsAsync(int buildingId) =>
+        await _context.Apartments
+            .AsNoTracking()
+            .Where(a => a.BuildingId == buildingId)
+            .Include(a => a.ApartmentUsers.Where(au => au.IsActive)).ThenInclude(au => au.User)
+            .OrderBy(a => a.Number)
+            .ToListAsync();
+
+    private static BuildingRegisterEntryDto ToRegisterEntryDto(Apartment apartment) => new()
+    {
+        ApartmentNumber = apartment.Number,
+        Floor = apartment.Floor,
+        IdealParts = apartment.IdealParts,
+        Members = apartment.ApartmentUsers
+            .OrderBy(au => au.Role)
+            .Select(au => new BuildingRegisterMemberDto
+            {
+                Name = au.User.Name,
+                Email = au.User.Email ?? string.Empty,
+                Role = (int)au.Role,
+                JoinedAt = au.JoinedAt
+            })
+            .ToList()
+    };
+
+    private static string RoleLabel(ApartmentRole role) => role switch
+    {
+        ApartmentRole.Owner => "Собственик",
+        ApartmentRole.HouseManager => "Домоуправител",
+        _ => "Живущ"
+    };
+
+    private static string CsvEscape(string value) =>
+        value.Contains(',') || value.Contains('"')
+            ? $"\"{value.Replace("\"", "\"\"")}\""
+            : value;
 
     private async Task<Building> GetManagedBuildingOrThrowAsync(string managerId)
     {
