@@ -11,5 +11,10 @@ namespace ZEstate.Core.Interfaces
         Task TransferAsync(string userId, TransferFundsDto dto);
 
         Task<List<CashLedgerEntryDto>> GetHistoryAsync(string userId);
+
+        // Withdraws money from an account to cover a specific repair's cost - records
+        // the withdrawal as a ledger entry linked to the repair, and adds the amount
+        // to the repair's ActualCost.
+        Task WithdrawForRepairAsync(string userId, WithdrawForRepairDto dto);
     }
 }

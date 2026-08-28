@@ -90,6 +90,60 @@ public class CashServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task WithdrawForRepairAsync_DecreasesAccountAndIncreasesActualCost()
+    {
+        var building = AddManagedBuilding();
+        _context.CashLedgerEntries.Add(new CashLedgerEntry { BuildingId = building.Id, Account = CashAccountType.Cash, Amount = 500, Description = "d" });
+        var repair = new Repair { BuildingId = building.Id, Title = "Покрив", Budget = 1000, Status = RepairStatus.InProgress };
+        _context.Repairs.Add(repair);
+        await _context.SaveChangesAsync();
+
+        await _service.WithdrawForRepairAsync(ManagerId, new WithdrawForRepairDto { Account = "Cash", Amount = 300, RepairId = repair.Id });
+
+        var balances = await _service.GetBalancesAsync(ManagerId);
+        Assert.Equal(200, balances.CashBalance);
+        Assert.Equal(300, _context.Repairs.Single().ActualCost);
+
+        var entry = _context.CashLedgerEntries.Single(e => e.RepairId == repair.Id);
+        Assert.Equal(-300, entry.Amount);
+    }
+
+    [Fact]
+    public async Task WithdrawForRepairAsync_AddsToExistingActualCost()
+    {
+        var building = AddManagedBuilding();
+        _context.CashLedgerEntries.Add(new CashLedgerEntry { BuildingId = building.Id, Account = CashAccountType.Bank, Amount = 500, Description = "d" });
+        var repair = new Repair { BuildingId = building.Id, Title = "Асансьор", Budget = 1000, ActualCost = 100, Status = RepairStatus.InProgress };
+        _context.Repairs.Add(repair);
+        await _context.SaveChangesAsync();
+
+        await _service.WithdrawForRepairAsync(ManagerId, new WithdrawForRepairDto { Account = "Bank", Amount = 150, RepairId = repair.Id });
+
+        Assert.Equal(250, _context.Repairs.Single().ActualCost);
+    }
+
+    [Fact]
+    public async Task WithdrawForRepairAsync_UnknownRepair_ThrowsNotFound()
+    {
+        AddManagedBuilding();
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.WithdrawForRepairAsync(ManagerId, new WithdrawForRepairDto { Account = "Cash", Amount = 10, RepairId = 999 }));
+    }
+
+    [Fact]
+    public async Task WithdrawForRepairAsync_InsufficientBalance_ThrowsBadRequest()
+    {
+        var building = AddManagedBuilding();
+        var repair = new Repair { BuildingId = building.Id, Title = "Покрив", Budget = 1000, Status = RepairStatus.Planned };
+        _context.Repairs.Add(repair);
+        await _context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<BadRequestException>(() =>
+            _service.WithdrawForRepairAsync(ManagerId, new WithdrawForRepairDto { Account = "Cash", Amount = 50, RepairId = repair.Id }));
+    }
+
+    [Fact]
     public async Task GetHistoryAsync_ReturnsNewestFirst()
     {
         var building = AddManagedBuilding();
