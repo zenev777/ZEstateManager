@@ -163,7 +163,7 @@ public class PaymentService : IPaymentService
 
         var session = await _paymentGateway.CreateCheckoutSessionAsync(
             remaining,
-            "bgn",
+            "eur",
             obligation.Fee.Title,
             $"{frontendBaseUrl}/dashboard/fees?checkout=success",
             $"{frontendBaseUrl}/dashboard/fees?checkout=cancel",
