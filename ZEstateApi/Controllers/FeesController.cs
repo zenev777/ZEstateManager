@@ -55,6 +55,16 @@ public class FeesController : ControllerBase
         return Ok(new { message = "Таксата е изтрита." });
     }
 
+    // GET: Преглед какво би генерирало "Генерирай сега" (брой апартаменти, суми), без да
+    // записва нищо - за потвърждаващия диалог, защото самото генериране е необратимо.
+    [HttpGet("generate-obligations/preview")]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
+    public async Task<IActionResult> PreviewObligations()
+    {
+        var preview = await _feeService.PreviewObligationsAsync();
+        return Ok(preview);
+    }
+
     // POST: Ръчно стартиране на генерирането на задължения за текущия период (демо/тест удобство -
     // същата логика, която фоновата задача пуска автоматично всеки ден)
     [HttpPost("generate-obligations")]

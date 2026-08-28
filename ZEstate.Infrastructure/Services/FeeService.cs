@@ -188,6 +188,9 @@ public class FeeService : IFeeService
     public Task<ObligationGenerationResult> GenerateObligationsAsync() =>
         _obligationGenerationService.GenerateForCurrentPeriodAsync();
 
+    public Task<ObligationGenerationPreview> PreviewObligationsAsync() =>
+        _obligationGenerationService.PreviewForCurrentPeriodAsync();
+
     public Task<int> MarkOverdueAsync() =>
         _obligationStatusService.MarkOverdueAsync();
 
