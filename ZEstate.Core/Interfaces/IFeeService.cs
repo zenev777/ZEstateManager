@@ -15,6 +15,7 @@ namespace ZEstate.Core.Interfaces
         // caller has no active apartment membership, rather than a NotFound/Forbidden.
         Task<List<ObligationSummaryDto>> GetMyObligationsAsync(string userId);
         Task<ObligationGenerationResult> GenerateObligationsAsync();
+        Task<ObligationGenerationPreview> PreviewObligationsAsync();
         Task<int> MarkOverdueAsync();
     }
 }

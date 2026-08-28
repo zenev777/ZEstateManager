@@ -164,6 +164,19 @@ public class FeeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task PreviewObligationsAsync_DelegatesToObligationGenerationService()
+    {
+        _generation.Setup(g => g.PreviewForCurrentPeriodAsync())
+            .ReturnsAsync(new ObligationGenerationPreview(2, 50, new List<ObligationPreviewFeeItem> { new("Такса поддръжка", 2, 50) }));
+
+        var result = await _service.PreviewObligationsAsync();
+
+        Assert.Equal(2, result.ApartmentCount);
+        Assert.Equal(50, result.TotalAmount);
+        Assert.Single(result.Fees);
+    }
+
+    [Fact]
     public async Task GetMyObligationsAsync_NoApartmentMembership_ReturnsEmptyList()
     {
         var result = await _service.GetMyObligationsAsync("stranger");

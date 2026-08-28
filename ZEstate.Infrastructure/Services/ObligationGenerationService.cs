@@ -20,7 +20,58 @@ public class ObligationGenerationService : IObligationGenerationService
         _notificationService = notificationService;
     }
 
+    private record PendingObligation(int ApartmentId, int FeeId, string FeeTitle, decimal Amount, DateTime? DueDate, DateTime? Period);
+
+    public async Task<ObligationGenerationPreview> PreviewForCurrentPeriodAsync()
+    {
+        var (pending, _) = await ComputePendingAsync();
+
+        var byFee = pending
+            .GroupBy(p => p.FeeTitle)
+            .Select(g => new ObligationPreviewFeeItem(g.Key, g.Count(), g.Sum(p => p.Amount)))
+            .OrderByDescending(f => f.TotalAmount)
+            .ToList();
+
+        return new ObligationGenerationPreview(
+            pending.Select(p => p.ApartmentId).Distinct().Count(),
+            pending.Sum(p => p.Amount),
+            byFee);
+    }
+
     public async Task<ObligationGenerationResult> GenerateForCurrentPeriodAsync()
+    {
+        var (pending, skipped) = await ComputePendingAsync();
+
+        foreach (var item in pending)
+        {
+            _context.Obligations.Add(new Obligation
+            {
+                ApartmentId = item.ApartmentId,
+                FeeId = item.FeeId,
+                Amount = item.Amount,
+                Status = ObligationStatus.Pending,
+                DueDate = item.DueDate,
+                Period = item.Period
+            });
+        }
+
+        if (pending.Count > 0)
+        {
+            await _context.SaveChangesAsync();
+            await NotifyResidentsAsync(pending);
+        }
+
+        var today = DateTime.UtcNow.Date;
+        _logger.LogInformation(
+            "Obligation generation run for period {Period:yyyy-MM}: {Created} created, {Skipped} already existed.",
+            new DateTime(today.Year, today.Month, 1), pending.Count, skipped);
+
+        return new ObligationGenerationResult(pending.Count, skipped);
+    }
+
+    // Shared eligibility/amount logic used by both the real run and the preview -
+    // computes what WOULD be created, without touching the database.
+    private async Task<(List<PendingObligation> Pending, int Skipped)> ComputePendingAsync()
     {
         var today = DateTime.UtcNow.Date;
         var currentPeriod = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -31,9 +82,8 @@ public class ObligationGenerationService : IObligationGenerationService
             .Where(f => f.DateFrom <= today && (f.DateTo == null || f.DateTo >= today))
             .ToListAsync();
 
-        var created = 0;
+        var pending = new List<PendingObligation>();
         var skipped = 0;
-        var newObligations = new List<(int ApartmentId, string FeeTitle, decimal Amount, DateTime? DueDate)>();
 
         foreach (var fee in activeFees)
         {
@@ -65,38 +115,17 @@ public class ObligationGenerationService : IObligationGenerationService
                     ? period.Value.AddMonths(1).AddDays(-1)
                     : fee.DateFrom.AddDays(14);
 
-                _context.Obligations.Add(new Obligation
-                {
-                    ApartmentId = apartment.Id,
-                    FeeId = fee.Id,
-                    Amount = amount,
-                    Status = ObligationStatus.Pending,
-                    DueDate = dueDate,
-                    Period = period
-                });
-
-                newObligations.Add((apartment.Id, fee.Title, amount, dueDate));
-                created++;
+                pending.Add(new PendingObligation(apartment.Id, fee.Id, fee.Title, amount, dueDate, period));
             }
         }
 
-        if (created > 0)
-        {
-            await _context.SaveChangesAsync();
-            await NotifyResidentsAsync(newObligations);
-        }
-
-        _logger.LogInformation(
-            "Obligation generation run for period {Period:yyyy-MM}: {Created} created, {Skipped} already existed.",
-            currentPeriod, created, skipped);
-
-        return new ObligationGenerationResult(created, skipped);
+        return (pending, skipped);
     }
 
     // Notifies every active resident of each apartment a new obligation was just
     // generated for - one query for all involved apartments' active memberships,
     // rather than per-obligation.
-    private async Task NotifyResidentsAsync(List<(int ApartmentId, string FeeTitle, decimal Amount, DateTime? DueDate)> newObligations)
+    private async Task NotifyResidentsAsync(List<PendingObligation> newObligations)
     {
         var apartmentIds = newObligations.Select(o => o.ApartmentId).Distinct().ToList();
         var usersByApartment = await _context.ApartmentUsers

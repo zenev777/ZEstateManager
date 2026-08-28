@@ -91,6 +91,36 @@ public class ObligationGenerationServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task PreviewForCurrentPeriodAsync_DoesNotPersistAndMatchesGenerateCounts()
+    {
+        var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
+        _context.Buildings.Add(building);
+        _context.SaveChanges();
+        SeedApartmentWithActiveResident(building, "res1");
+
+        _context.Fees.Add(new Fee
+        {
+            Building = building,
+            Title = "Такса поддръжка",
+            Amount = 25,
+            Type = FeeType.Fixed,
+            Frequency = FeeFrequency.Monthly,
+            DateFrom = DateTime.UtcNow.AddMonths(-1)
+        });
+        await _context.SaveChangesAsync();
+
+        var preview = await _service.PreviewForCurrentPeriodAsync();
+
+        Assert.Equal(1, preview.ApartmentCount);
+        Assert.Equal(25, preview.TotalAmount);
+        Assert.Single(preview.Fees);
+        Assert.Equal("Такса поддръжка", preview.Fees[0].FeeTitle);
+        Assert.Empty(_context.Obligations);
+        _notificationService.Verify(n => n.NotifyAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GenerateForCurrentPeriodAsync_AlreadyExists_DoesNotNotifyAgain()
     {
         var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
