@@ -12,16 +12,17 @@ namespace ZEstate.Tests.Services;
 
 public class AuthServiceTests
 {
-    private static (AuthService Service, Mock<UserManager<ApplicationUser>> UserManager, ApplicationDbContextFixture Db, Mock<IEmailSender> EmailSender)
+    private static (AuthService Service, Mock<UserManager<ApplicationUser>> UserManager, ApplicationDbContextFixture Db, Mock<IEmailSender> EmailSender, Mock<INotificationService> NotificationService)
         CreateSut()
     {
         var context = TestHelpers.CreateContext();
         var userManager = TestHelpers.MockUserManager();
         var emailSender = new Mock<IEmailSender>();
+        var notificationService = new Mock<INotificationService>();
         var config = TestHelpers.BuildConfiguration();
 
-        var service = new AuthService(userManager.Object, config, context, emailSender.Object);
-        return (service, userManager, new ApplicationDbContextFixture(context), emailSender);
+        var service = new AuthService(userManager.Object, config, context, emailSender.Object, notificationService.Object);
+        return (service, userManager, new ApplicationDbContextFixture(context), emailSender, notificationService);
     }
 
     // Thin wrapper so tests can dispose the context without another using-block layer.
@@ -35,7 +36,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_ValidCredentials_ReturnsTokenWithRoles()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         var user = new ApplicationUser { Id = "u1", Email = "a@b.com", UserName = "a@b.com", FirstName = "A", LastName = "B" };
@@ -53,7 +54,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_UnknownEmail_ThrowsUnauthorized()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync("missing@b.com")).ReturnsAsync((ApplicationUser?)null);
@@ -65,7 +66,7 @@ public class AuthServiceTests
     [Fact]
     public async Task LoginAsync_WrongPassword_ThrowsUnauthorized()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         var user = new ApplicationUser { Id = "u1", Email = "a@b.com", UserName = "a@b.com" };
@@ -79,7 +80,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_DuplicateEmail_ThrowsBadRequest()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync("dup@b.com")).ReturnsAsync(new ApplicationUser());
@@ -92,7 +93,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_HouseManagerWithoutBuilding_ThrowsBadRequest()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
@@ -105,7 +106,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_ResidentWithoutJoinBuilding_ThrowsBadRequest()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
@@ -118,7 +119,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_ResidentWithInvalidInviteCode_ThrowsBadRequest()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
@@ -136,7 +137,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_ResidentWithRevokedInviteCode_ThrowsBadRequest()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         db.Context.Buildings.Add(new Building { Name = "B", Address = "A", InviteCode = "REV1", InviteCodeActive = false });
@@ -157,7 +158,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_HouseManager_CreatesBuildingAndReturnsInviteCode()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
@@ -189,10 +190,10 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_Resident_CreatesJoinRequestAndIncrementsUseCount()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, notificationService) = CreateSut();
         using var _db = db;
 
-        var building = new Building { Name = "B", Address = "A", InviteCode = "OK123", InviteCodeUseCount = 0 };
+        var building = new Building { Name = "B", Address = "A", InviteCode = "OK123", InviteCodeUseCount = 0, ManagerId = "mgr1" };
         db.Context.Buildings.Add(building);
         await db.Context.SaveChangesAsync();
 
@@ -216,12 +217,14 @@ public class AuthServiceTests
         Assert.Single(db.Context.JoinRequests);
         Assert.Equal(1, db.Context.Buildings.Single().InviteCodeUseCount);
         Assert.Equal(ApartmentRole.Owner, db.Context.JoinRequests.Single().RequestedRole);
+        notificationService.Verify(n => n.NotifyAsync(
+            "mgr1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
     public async Task GetBuildingByCodeAsync_UnknownCode_ThrowsNotFound()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.GetBuildingByCodeAsync("MISSING"));
@@ -230,7 +233,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetBuildingByCodeAsync_ExpiredCode_ThrowsBadRequest()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         db.Context.Buildings.Add(new Building
@@ -248,7 +251,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetBuildingByCodeAsync_MaxUsesReached_ThrowsBadRequest()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         db.Context.Buildings.Add(new Building
@@ -267,7 +270,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetBuildingByCodeAsync_ValidCode_ReturnsBuildingInfo()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         db.Context.Buildings.Add(new Building { Name = "B", Address = "A", InviteCode = "GOOD1" });
@@ -282,7 +285,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetMeAsync_Manager_ReturnsManagerRoleOnly()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var result = await service.GetMeAsync("mgr1", isManager: true);
@@ -294,7 +297,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetMeAsync_ResidentWithNoRequests_ReturnsNoneStatus()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var result = await service.GetMeAsync("res1", isManager: false);
@@ -308,7 +311,7 @@ public class AuthServiceTests
     {
         // Mirrors data seeded directly (e.g. the QA fixture), which creates an
         // active ApartmentUser without ever going through the join-request flow.
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
@@ -330,7 +333,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetMeAsync_InactiveApartmentMembership_FallsBackToJoinRequestHistory()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
@@ -349,7 +352,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetMeAsync_ResidentRejectedOnce_CanRetryIsTrue()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
@@ -377,7 +380,7 @@ public class AuthServiceTests
     [Fact]
     public async Task GetMeAsync_ResidentRejectedTwice_CanRetryIsFalse()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
@@ -397,7 +400,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ResubmitJoinRequestAsync_NoRejectedRequest_ThrowsBadRequest()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, _, db, _, _) = CreateSut();
         using var _db = db;
 
         var dto = new JoinBuildingDto { InviteCode = "X", ApartmentNumber = "1", Status = "Owner" };
@@ -408,10 +411,10 @@ public class AuthServiceTests
     [Fact]
     public async Task ResubmitJoinRequestAsync_AfterOneRejection_CreatesNewPendingRequest()
     {
-        var (service, _, db, _) = CreateSut();
+        var (service, userManager, db, _, notificationService) = CreateSut();
         using var _db = db;
 
-        var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
+        var building = new Building { Name = "B", Address = "A", InviteCode = "C1", ManagerId = "mgr1" };
         var apartment = new Apartment { Building = building, Number = "1", Floor = 0, IdealParts = 0, Budget = 0 };
         db.Context.Buildings.Add(building);
         db.Context.Apartments.Add(apartment);
@@ -425,17 +428,21 @@ public class AuthServiceTests
         });
         await db.Context.SaveChangesAsync();
 
+        userManager.Setup(m => m.FindByIdAsync("res1")).ReturnsAsync(new ApplicationUser { Id = "res1", FirstName = "R", LastName = "Es" });
+
         var dto = new JoinBuildingDto { InviteCode = "C1", ApartmentNumber = "2", Status = "Resident" };
         await service.ResubmitJoinRequestAsync("res1", dto);
 
         Assert.Equal(2, db.Context.JoinRequests.Count());
         Assert.Contains(db.Context.JoinRequests, jr => jr.Status == JoinRequestStatus.Pending && jr.ApartmentId == db.Context.Apartments.Single(a => a.Number == "2").Id);
+        notificationService.Verify(n => n.NotifyAsync(
+            "mgr1", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<bool>()), Times.Once);
     }
 
     [Fact]
     public async Task ForgotPasswordAsync_UnknownEmail_DoesNotSendEmail()
     {
-        var (service, userManager, db, emailSender) = CreateSut();
+        var (service, userManager, db, emailSender, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync("missing@b.com")).ReturnsAsync((ApplicationUser?)null);
@@ -448,7 +455,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPasswordAsync_InactiveUser_DoesNotSendEmail()
     {
-        var (service, userManager, db, emailSender) = CreateSut();
+        var (service, userManager, db, emailSender, _) = CreateSut();
         using var _db = db;
 
         var user = new ApplicationUser { Id = "u1", Email = "a@b.com", IsActive = false };
@@ -462,7 +469,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPasswordAsync_ActiveUser_SendsResetEmail()
     {
-        var (service, userManager, db, emailSender) = CreateSut();
+        var (service, userManager, db, emailSender, _) = CreateSut();
         using var _db = db;
 
         var user = new ApplicationUser { Id = "u1", Email = "a@b.com", FirstName = "A", IsActive = true };
@@ -477,7 +484,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ResetPasswordAsync_UnknownEmail_ThrowsBadRequest()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         userManager.Setup(m => m.FindByEmailAsync("missing@b.com")).ReturnsAsync((ApplicationUser?)null);
@@ -489,7 +496,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ResetPasswordAsync_InvalidToken_ThrowsBadRequestWithFriendlyMessage()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         var user = new ApplicationUser { Id = "u1", Email = "a@b.com" };
@@ -506,7 +513,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ResetPasswordAsync_Success_CompletesWithoutError()
     {
-        var (service, userManager, db, _) = CreateSut();
+        var (service, userManager, db, _, _) = CreateSut();
         using var _db = db;
 
         var user = new ApplicationUser { Id = "u1", Email = "a@b.com" };
