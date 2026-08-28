@@ -130,6 +130,15 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Applies any pending EF Core migrations on startup - the deploy pipeline has no
+// separate migration step, so without this the schema silently drifts behind the
+// model (as happened here: AspNetUsers.EmailNotificationsEnabled was missing).
+using (var migrationScope = app.Services.CreateScope())
+{
+    var dbContext = migrationScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
+
 // Seed the fixed application roles used by registration.
 using (var scope = app.Services.CreateScope())
 {
