@@ -62,6 +62,10 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("When the pending manager transfer takes effect, unless cancelled first")]
         public DateTime? PendingManagerTransferEffectiveAt { get; set; }
 
+        [MaxLength(34)]
+        [Comment("IBAN the building receives online (Stripe) payments' payouts to - required before online payment can be offered to residents")]
+        public string? Iban { get; set; }
+
         [Comment("The house manager responsible for this building")]
         public string? ManagerId { get; set; }
 

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ZEstate.Core.DTOs.Buildings;
 using ZEstate.Core.Exceptions;
 using ZEstate.Core.Interfaces;
+using ZEstate.Core.Validation;
 using ZEstate.Infrastructure.Data.Enums;
 using ZEstate.Infrastructure.Data.Models;
 
@@ -27,6 +28,19 @@ public class BuildingService : IBuildingService
 
         building.Name = dto.Name;
         building.Address = dto.Address;
+
+        await _context.SaveChangesAsync();
+
+        return ToDto(building);
+    }
+
+    public async Task<BuildingSummaryDto> UpdateIbanAsync(string managerId, string iban)
+    {
+        if (!IbanValidator.IsValid(iban))
+            throw new BadRequestException("Невалиден IBAN.");
+
+        var building = await GetManagedBuildingOrThrowAsync(managerId);
+        building.Iban = IbanValidator.Normalize(iban);
 
         await _context.SaveChangesAsync();
 
@@ -379,7 +393,8 @@ public class BuildingService : IBuildingService
         InviteCodeExpiresAt = building.InviteCodeExpiresAt,
         InviteCodeMaxUses = building.InviteCodeMaxUses,
         InviteCodeUseCount = building.InviteCodeUseCount,
-        QuorumThresholdPercent = building.QuorumThresholdPercent
+        QuorumThresholdPercent = building.QuorumThresholdPercent,
+        Iban = building.Iban
     };
 
     private static ApartmentSummaryDto ToDto(Apartment apartment) => new()

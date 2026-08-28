@@ -1,12 +1,23 @@
 namespace ZEstate.Core.Interfaces
 {
-    public record PaymentGatewayResult(bool Succeeded, string? TransactionId, string? Error);
+    public record CheckoutSessionResult(string SessionId, string CheckoutUrl);
+    public record WebhookCheckoutCompleted(string SessionId, decimal AmountTotal, IReadOnlyDictionary<string, string> Metadata);
 
-    // Scaffolding for a future online payment method (e.g. Stripe/ePay) — see
-    // PaymentMethod.Stripe. No implementation is wired up yet; manual payments
-    // (PaymentMethod.Manual) go straight through PaymentsController.
+    // Abstracts the online payment provider (Stripe) behind an interface so
+    // PaymentService stays unit-testable without hitting a real payment API.
+    // StripePaymentGateway (ZEstate.Infrastructure) is the only implementation.
     public interface IPaymentGateway
     {
-        Task<PaymentGatewayResult> ChargeAsync(decimal amount, string currency, string description);
+        Task<CheckoutSessionResult> CreateCheckoutSessionAsync(
+            decimal amount,
+            string currency,
+            string description,
+            string successUrl,
+            string cancelUrl,
+            IReadOnlyDictionary<string, string> metadata);
+
+        // Verifies the webhook signature and returns the completed-checkout details,
+        // or null if the event isn't a completed checkout (some other Stripe event type).
+        WebhookCheckoutCompleted? ParseCheckoutCompletedWebhook(string payload, string signatureHeader);
     }
 }

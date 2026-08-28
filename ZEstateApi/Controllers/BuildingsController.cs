@@ -33,6 +33,12 @@ public class BuildingsController : ControllerBase
         return Ok(await _buildingService.UpdateMyBuildingAsync(CurrentUserId, dto));
     }
 
+    // PUT: Задаване/смяна на IBAN на сградата - изисква се преди резидентите да
+    // могат да плащат онлайн (Stripe checkout).
+    [HttpPut("my/iban")]
+    public async Task<IActionResult> UpdateIban([FromBody] UpdateBuildingIbanDto dto) =>
+        Ok(await _buildingService.UpdateIbanAsync(CurrentUserId, dto.Iban));
+
     // POST: Regenerates the invite code - the old one becomes invalid immediately
     [HttpPost("my/invite-code/regenerate")]
     public async Task<IActionResult> RegenerateInviteCode() =>

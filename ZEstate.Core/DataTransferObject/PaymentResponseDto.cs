@@ -18,6 +18,11 @@ public class RegisterPaymentResultDto
     public decimal CreditApplied { get; set; }
 }
 
+public class CheckoutSessionUrlDto
+{
+    public string CheckoutUrl { get; set; } = string.Empty;
+}
+
 public class PaymentSummaryDto
 {
     public int Id { get; set; }
