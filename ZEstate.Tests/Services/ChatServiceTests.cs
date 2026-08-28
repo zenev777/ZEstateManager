@@ -1,3 +1,4 @@
+using Moq;
 using ZEstate.Core.Exceptions;
 using ZEstate.Infrastructure;
 using ZEstate.Infrastructure.Data.IdentityModels;
@@ -9,6 +10,7 @@ namespace ZEstate.Tests.Services;
 public class ChatServiceTests : IDisposable
 {
     private readonly ApplicationDbContext _context;
+    private readonly Mock<Microsoft.AspNetCore.Identity.UserManager<ApplicationUser>> _userManager;
     private readonly ChatService _service;
     private const string ManagerId = "mgr1";
     private const string ResidentId = "res1";
@@ -16,7 +18,9 @@ public class ChatServiceTests : IDisposable
     public ChatServiceTests()
     {
         _context = TestHelpers.CreateContext();
-        _service = new ChatService(_context);
+        _userManager = TestHelpers.MockUserManager();
+        _userManager.Setup(m => m.GetRolesAsync(It.IsAny<ApplicationUser>())).ReturnsAsync(new List<string>());
+        _service = new ChatService(_context, _userManager.Object);
     }
 
     public void Dispose() => _context.Dispose();
