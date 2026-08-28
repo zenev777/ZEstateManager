@@ -65,6 +65,25 @@ public class BuildingServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateIbanAsync_InvalidFormat_ThrowsBadRequest()
+    {
+        AddManagedBuilding();
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _service.UpdateIbanAsync(ManagerId, "not-an-iban"));
+    }
+
+    [Fact]
+    public async Task UpdateIbanAsync_Valid_NormalizesAndSaves()
+    {
+        AddManagedBuilding();
+
+        var result = await _service.UpdateIbanAsync(ManagerId, "bg80 bnbg 9661 1020 3456 78");
+
+        Assert.Equal("BG80BNBG96611020345678", result.Iban);
+        Assert.Equal("BG80BNBG96611020345678", _context.Buildings.Single().Iban);
+    }
+
+    [Fact]
     public async Task RevokeInviteCodeAsync_DeactivatesCode()
     {
         AddManagedBuilding();

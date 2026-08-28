@@ -12,6 +12,14 @@ public class BuildingSummaryDto
     public int? InviteCodeMaxUses { get; set; }
     public int InviteCodeUseCount { get; set; }
     public decimal QuorumThresholdPercent { get; set; }
+
+    // Required before residents can pay online (Stripe) - null until the manager sets it.
+    public string? Iban { get; set; }
+}
+
+public class UpdateBuildingIbanDto
+{
+    public string Iban { get; set; } = string.Empty;
 }
 
 public class ApartmentSummaryDto

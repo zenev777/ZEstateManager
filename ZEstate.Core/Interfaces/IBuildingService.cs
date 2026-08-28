@@ -8,6 +8,7 @@ namespace ZEstate.Core.Interfaces
     {
         Task<BuildingSummaryDto> GetMyBuildingAsync(string managerId);
         Task<BuildingSummaryDto> UpdateMyBuildingAsync(string managerId, UpdateBuildingDto dto);
+        Task<BuildingSummaryDto> UpdateIbanAsync(string managerId, string iban);
         Task<BuildingSummaryDto> RegenerateInviteCodeAsync(string managerId);
         Task<BuildingSummaryDto> RevokeInviteCodeAsync(string managerId);
         Task<BuildingSummaryDto> UpdateInviteCodeLimitsAsync(string managerId, InviteCodeLimitsDto dto);

@@ -1,5 +1,7 @@
+using Moq;
 using ZEstate.Core.DTOs.Payments;
 using ZEstate.Core.Exceptions;
+using ZEstate.Core.Interfaces;
 using ZEstate.Infrastructure;
 using ZEstate.Infrastructure.Data.Enums;
 using ZEstate.Infrastructure.Data.Models;
@@ -10,13 +12,14 @@ namespace ZEstate.Tests.Services;
 public class PaymentServiceTests : IDisposable
 {
     private readonly ApplicationDbContext _context;
+    private readonly Mock<IPaymentGateway> _paymentGateway = new();
     private readonly PaymentService _service;
     private const string ManagerId = "mgr1";
 
     public PaymentServiceTests()
     {
         _context = TestHelpers.CreateContext();
-        _service = new PaymentService(_context);
+        _service = new PaymentService(_context, _paymentGateway.Object, TestHelpers.BuildConfiguration());
     }
 
     public void Dispose() => _context.Dispose();
@@ -142,5 +145,135 @@ public class PaymentServiceTests : IDisposable
 
         Assert.Single(result);
         Assert.Equal("1", result[0].ApartmentNumber);
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_ObligationNotFound_ThrowsNotFound()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() => _service.CreateCheckoutSessionAsync("res1", 999));
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_NotOwnApartment_ThrowsForbidden()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        building.Iban = "BG80BNBG96611020345678";
+        var fee = new Fee { BuildingId = building.Id, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Pending };
+        _context.Obligations.Add(obligation);
+        await _context.SaveChangesAsync();
+
+        // "res1" has no ApartmentUser membership at all here.
+        await Assert.ThrowsAsync<ForbiddenException>(() => _service.CreateCheckoutSessionAsync("res1", obligation.Id));
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_AlreadyPaid_ThrowsBadRequest()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        building.Iban = "BG80BNBG96611020345678";
+        var fee = new Fee { BuildingId = building.Id, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Paid };
+        _context.Obligations.Add(obligation);
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        await _context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _service.CreateCheckoutSessionAsync("res1", obligation.Id));
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_NoBuildingIban_ThrowsBadRequest()
+    {
+        var (_, apartment) = AddManagedBuildingWithApartment(); // Iban left null
+        var fee = new Fee { BuildingId = apartment.BuildingId, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Pending };
+        _context.Obligations.Add(obligation);
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        await _context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _service.CreateCheckoutSessionAsync("res1", obligation.Id));
+    }
+
+    [Fact]
+    public async Task CreateCheckoutSessionAsync_Valid_CallsGatewayWithRemainingBalance()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        building.Iban = "BG80BNBG96611020345678";
+        var fee = new Fee { BuildingId = building.Id, Title = "Monthly fee", Amount = 50, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 50, Status = ObligationStatus.PartiallyPaid };
+        _context.Obligations.Add(obligation);
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        await _context.SaveChangesAsync();
+        _context.Payments.Add(new Payment { ObligationId = obligation.Id, Amount = 20, Method = PaymentMethod.Manual });
+        await _context.SaveChangesAsync();
+
+        _paymentGateway
+            .Setup(g => g.CreateCheckoutSessionAsync(30, "bgn", "Monthly fee", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlyDictionary<string, string>>()))
+            .ReturnsAsync(new CheckoutSessionResult("sess_1", "https://checkout.stripe.com/sess_1"));
+
+        var result = await _service.CreateCheckoutSessionAsync("res1", obligation.Id);
+
+        Assert.Equal("https://checkout.stripe.com/sess_1", result.CheckoutUrl);
+    }
+
+    [Fact]
+    public async Task HandleStripeWebhookAsync_NotCheckoutCompleted_DoesNothing()
+    {
+        _paymentGateway.Setup(g => g.ParseCheckoutCompletedWebhook(It.IsAny<string>(), It.IsAny<string>())).Returns((WebhookCheckoutCompleted?)null);
+
+        await _service.HandleStripeWebhookAsync("{}", "sig");
+
+        Assert.Empty(_context.Payments);
+    }
+
+    [Fact]
+    public async Task HandleStripeWebhookAsync_ValidCompletedCheckout_RegistersPaymentAndMarksPaid()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        var fee = new Fee { BuildingId = building.Id, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Pending };
+        _context.Obligations.Add(obligation);
+        await _context.SaveChangesAsync();
+
+        _paymentGateway
+            .Setup(g => g.ParseCheckoutCompletedWebhook("{}", "sig"))
+            .Returns(new WebhookCheckoutCompleted("sess_1", 10, new Dictionary<string, string> { ["obligationId"] = obligation.Id.ToString() }));
+
+        await _service.HandleStripeWebhookAsync("{}", "sig");
+
+        var payment = _context.Payments.Single();
+        Assert.Equal(10, payment.Amount);
+        Assert.Equal(PaymentMethod.Stripe, payment.Method);
+        Assert.Equal(ObligationStatus.Paid, _context.Obligations.Single().Status);
+    }
+
+    [Fact]
+    public async Task HandleStripeWebhookAsync_ObligationAlreadyPaid_IsIdempotent()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        var fee = new Fee { BuildingId = building.Id, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Paid };
+        _context.Obligations.Add(obligation);
+        await _context.SaveChangesAsync();
+
+        _paymentGateway
+            .Setup(g => g.ParseCheckoutCompletedWebhook("{}", "sig"))
+            .Returns(new WebhookCheckoutCompleted("sess_1", 10, new Dictionary<string, string> { ["obligationId"] = obligation.Id.ToString() }));
+
+        await _service.HandleStripeWebhookAsync("{}", "sig");
+
+        Assert.Empty(_context.Payments);
     }
 }

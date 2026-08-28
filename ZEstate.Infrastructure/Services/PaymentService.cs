@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using ZEstate.Core.DTOs.Payments;
 using ZEstate.Core.Exceptions;
 using ZEstate.Core.Interfaces;
@@ -10,10 +11,14 @@ namespace ZEstate.Infrastructure.Services;
 public class PaymentService : IPaymentService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IPaymentGateway _paymentGateway;
+    private readonly IConfiguration _configuration;
 
-    public PaymentService(ApplicationDbContext context)
+    public PaymentService(ApplicationDbContext context, IPaymentGateway paymentGateway, IConfiguration configuration)
     {
         _context = context;
+        _paymentGateway = paymentGateway;
+        _configuration = configuration;
     }
 
     // Разпределя се по най-старите неплатени задължения на апартамента; евентуален
@@ -120,6 +125,85 @@ public class PaymentService : IPaymentService
             Method = (int)p.Method,
             Note = p.Note
         }).ToList();
+    }
+
+    // Резидентът плаща собствено задължение с карта през Stripe Checkout. Изисква
+    // сградата вече да е задала IBAN (за бъдещо реално разпределяне на парите).
+    public async Task<CheckoutSessionUrlDto> CreateCheckoutSessionAsync(string userId, int obligationId)
+    {
+        var obligation = await _context.Obligations
+            .Include(o => o.Apartment).ThenInclude(a => a.Building)
+            .Include(o => o.Fee)
+            .Include(o => o.Payments)
+            .FirstOrDefaultAsync(o => o.Id == obligationId);
+
+        if (obligation == null)
+            throw new NotFoundException("Задължението не е намерено.");
+
+        var myApartmentId = await _context.ApartmentUsers
+            .Where(au => au.UserId == userId && au.IsActive)
+            .Select(au => (int?)au.ApartmentId)
+            .FirstOrDefaultAsync();
+
+        if (myApartmentId == null || obligation.ApartmentId != myApartmentId.Value)
+            throw new ForbiddenException();
+
+        if (obligation.Status == ObligationStatus.Paid)
+            throw new BadRequestException("Задължението вече е платено.");
+
+        var building = obligation.Apartment.Building;
+        if (string.IsNullOrWhiteSpace(building.Iban))
+            throw new BadRequestException("Сградата няма зададен IBAN за получаване на плащания. Свържи се с домоуправителя.");
+
+        var remaining = obligation.Amount - obligation.Payments.Sum(p => p.Amount);
+        if (remaining <= 0)
+            throw new BadRequestException("Няма дължима сума по това задължение.");
+
+        var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:4200";
+
+        var session = await _paymentGateway.CreateCheckoutSessionAsync(
+            remaining,
+            "bgn",
+            obligation.Fee.Title,
+            $"{frontendBaseUrl}/dashboard/fees?checkout=success",
+            $"{frontendBaseUrl}/dashboard/fees?checkout=cancel",
+            new Dictionary<string, string> { ["obligationId"] = obligation.Id.ToString() });
+
+        return new CheckoutSessionUrlDto { CheckoutUrl = session.CheckoutUrl };
+    }
+
+    public async Task HandleStripeWebhookAsync(string payload, string signatureHeader)
+    {
+        var completed = _paymentGateway.ParseCheckoutCompletedWebhook(payload, signatureHeader);
+        if (completed == null)
+            return;
+
+        if (!completed.Metadata.TryGetValue("obligationId", out var obligationIdRaw) || !int.TryParse(obligationIdRaw, out var obligationId))
+            return;
+
+        var obligation = await _context.Obligations.Include(o => o.Payments).FirstOrDefaultAsync(o => o.Id == obligationId);
+
+        // Already paid (or gone) - nothing to do. Stripe may retry webhook delivery,
+        // so this also makes the handler idempotent against duplicate events.
+        if (obligation == null || obligation.Status == ObligationStatus.Paid)
+            return;
+
+        var alreadyPaid = obligation.Payments.Sum(p => p.Amount);
+
+        _context.Payments.Add(new Payment
+        {
+            ObligationId = obligation.Id,
+            Amount = completed.AmountTotal,
+            PaidAt = DateTime.UtcNow,
+            Method = PaymentMethod.Stripe,
+            Note = $"Stripe checkout {completed.SessionId}"
+        });
+
+        obligation.Status = (alreadyPaid + completed.AmountTotal) >= obligation.Amount
+            ? ObligationStatus.Paid
+            : ObligationStatus.PartiallyPaid;
+
+        await _context.SaveChangesAsync();
     }
 
     // The house manager owns the building directly (Building.ManagerId); a Cashier
