@@ -9,7 +9,7 @@ using ZEstateApi.Authorization;
 
 [ApiController]
 [Route("api/repairs")]
-[Authorize(Policy = PolicyNames.BuildingManagement)]
+[Authorize]
 public class RepairsController : ControllerBase
 {
     private readonly IRepairService _repairService;
@@ -19,13 +19,14 @@ public class RepairsController : ControllerBase
         _repairService = repairService;
     }
 
-    // GET: Всички ремонти на управляваната сграда
+    // GET: Ремонтите на сградата - вижда се от всеки неин член, не само домоуправителя
     [HttpGet]
     public async Task<IActionResult> GetRepairs() =>
         Ok(await _repairService.GetRepairsAsync(CurrentUserId));
 
     // POST: Създаване на ремонт
     [HttpPost]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
     public async Task<IActionResult> CreateRepair([FromBody] CreateRepairDto dto)
     {
         if (!ModelState.IsValid)
@@ -36,6 +37,7 @@ public class RepairsController : ControllerBase
 
     // PUT: Редакция на ремонт (вкл. статус и реален разход)
     [HttpPut("{id:int}")]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
     public async Task<IActionResult> UpdateRepair(int id, [FromBody] UpdateRepairDto dto)
     {
         if (!ModelState.IsValid)
@@ -46,6 +48,7 @@ public class RepairsController : ControllerBase
 
     // DELETE: Изтриване на ремонт (само ако разходите все още не са разпределени)
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
     public async Task<IActionResult> DeleteRepair(int id)
     {
         await _repairService.DeleteRepairAsync(CurrentUserId, id);
@@ -56,11 +59,13 @@ public class RepairsController : ControllerBase
     // или по ръчно зададено разпределение - и създаване на съответните Obligations.
     // Позволено само веднъж на ремонт и само след като е одобрен/в процес/завършен (не Planned).
     [HttpPost("{id:int}/allocate-costs")]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
     public async Task<IActionResult> AllocateCosts(int id, [FromBody] AllocateRepairCostsDto dto) =>
         Ok(await _repairService.AllocateCostsAsync(CurrentUserId, id, dto));
 
     // POST: Прикачване на фактура/документ към ремонт
     [HttpPost("{id:int}/documents")]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
     [RequestSizeLimit(DocumentUploadValidation.MaxBytes)]
     public async Task<IActionResult> UploadDocument(int id, IFormFile file)
     {
@@ -70,8 +75,9 @@ public class RepairsController : ControllerBase
         return Ok(result);
     }
 
-    // GET: Прикачените документи на ремонт
+    // GET: Прикачените документи на ремонт (фактури) - остава само за домоуправителя
     [HttpGet("{id:int}/documents")]
+    [Authorize(Policy = PolicyNames.BuildingManagement)]
     public async Task<IActionResult> GetDocuments(int id) =>
         Ok(await _repairService.GetDocumentsAsync(CurrentUserId, id));
 

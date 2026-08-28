@@ -41,6 +41,30 @@ public class RepairServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetRepairsAsync_NonMember_ThrowsNotFound()
+    {
+        AddManagedBuilding();
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _service.GetRepairsAsync("stranger"));
+    }
+
+    [Fact]
+    public async Task GetRepairsAsync_ResidentWithoutManagerRights_SeesRepairsReadOnly()
+    {
+        var building = AddManagedBuilding();
+        AddRepair(building);
+        var apartment = new Apartment { BuildingId = building.Id, Number = "1", Floor = 1, IdealParts = 10, Budget = 0 };
+        _context.Apartments.Add(apartment);
+        await _context.SaveChangesAsync();
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        await _context.SaveChangesAsync();
+
+        var result = await _service.GetRepairsAsync("res1");
+
+        Assert.Single(result);
+    }
+
+    [Fact]
     public async Task CreateRepairAsync_StartsAsPlanned()
     {
         AddManagedBuilding();

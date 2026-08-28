@@ -18,9 +18,9 @@ public class RepairService : IRepairService
         _fileStorage = fileStorage;
     }
 
-    public async Task<List<RepairListItemDto>> GetRepairsAsync(string managerId)
+    public async Task<List<RepairListItemDto>> GetRepairsAsync(string userId)
     {
-        var building = await GetManagedBuildingOrThrowAsync(managerId);
+        var building = await GetMyBuildingOrThrowAsync(userId);
 
         var repairs = await _context.Repairs
             .Where(r => r.BuildingId == building.Id)
@@ -246,6 +246,30 @@ public class RepairService : IRepairService
         var building = await _context.Buildings.FirstOrDefaultAsync(b => b.ManagerId == managerId);
         if (building == null)
             throw new NotFoundException("Нямаш управлявана сграда.");
+
+        return building;
+    }
+
+    // Manager resolves via Building.ManagerId; any other building member (resident,
+    // cashier) resolves via their apartment membership - repairs are visible (read-only)
+    // to every member, only create/update/delete/allocate/upload stay manager-only.
+    private async Task<Building> GetMyBuildingOrThrowAsync(string userId)
+    {
+        var managed = await _context.Buildings.FirstOrDefaultAsync(b => b.ManagerId == userId);
+        if (managed != null)
+            return managed;
+
+        var buildingId = await _context.ApartmentUsers
+            .Where(au => au.UserId == userId)
+            .Select(au => (int?)au.Apartment.BuildingId)
+            .FirstOrDefaultAsync();
+
+        var building = buildingId.HasValue
+            ? await _context.Buildings.FirstOrDefaultAsync(b => b.Id == buildingId.Value)
+            : null;
+
+        if (building == null)
+            throw new NotFoundException("Нямаш сграда.");
 
         return building;
     }
