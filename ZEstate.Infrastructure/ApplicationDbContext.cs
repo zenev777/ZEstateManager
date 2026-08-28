@@ -58,6 +58,7 @@ namespace ZEstate.Infrastructure
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<ApartmentTransferLog> ApartmentTransferLogs { get; set; }
+        public DbSet<CashLedgerEntry> CashLedgerEntries { get; set; }
     }
 
     // Relabels a DateTime as Kind=Utc without shifting the wall-clock value - these

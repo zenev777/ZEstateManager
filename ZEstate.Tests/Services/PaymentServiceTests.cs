@@ -73,6 +73,35 @@ public class PaymentServiceTests : IDisposable
         Assert.Equal((int)ObligationStatus.Paid, result.Allocations[0].Status);
         Assert.Equal(ObligationStatus.Pending, _context.Obligations.Single(o => o.Id == newer.Id).Status);
         Assert.Equal(0, result.CreditApplied);
+
+        // Manual payment with no explicit Account defaults to Cash.
+        var ledgerEntry = Assert.Single(_context.CashLedgerEntries);
+        Assert.Equal(CashAccountType.Cash, ledgerEntry.Account);
+        Assert.Equal(30, ledgerEntry.Amount);
+    }
+
+    [Fact]
+    public async Task RegisterPaymentAsync_ManualWithBankAccount_CreatesBankLedgerEntry()
+    {
+        var (_, apartment) = AddManagedBuildingWithApartment();
+
+        var dto = new RegisterPaymentDto { ApartmentId = apartment.Id, Amount = 20, PaidAt = DateTime.UtcNow, Method = "Manual", Account = "Bank" };
+        await _service.RegisterPaymentAsync(ManagerId, dto);
+
+        var ledgerEntry = Assert.Single(_context.CashLedgerEntries);
+        Assert.Equal(CashAccountType.Bank, ledgerEntry.Account);
+    }
+
+    [Fact]
+    public async Task RegisterPaymentAsync_StripeMethod_IgnoresAccountAndUsesBank()
+    {
+        var (_, apartment) = AddManagedBuildingWithApartment();
+
+        var dto = new RegisterPaymentDto { ApartmentId = apartment.Id, Amount = 20, PaidAt = DateTime.UtcNow, Method = "Stripe", Account = "Cash" };
+        await _service.RegisterPaymentAsync(ManagerId, dto);
+
+        var ledgerEntry = Assert.Single(_context.CashLedgerEntries);
+        Assert.Equal(CashAccountType.Bank, ledgerEntry.Account);
     }
 
     [Fact]
@@ -255,6 +284,10 @@ public class PaymentServiceTests : IDisposable
         Assert.Equal(10, payment.Amount);
         Assert.Equal(PaymentMethod.Stripe, payment.Method);
         Assert.Equal(ObligationStatus.Paid, _context.Obligations.Single().Status);
+
+        var ledgerEntry = Assert.Single(_context.CashLedgerEntries);
+        Assert.Equal(CashAccountType.Bank, ledgerEntry.Account);
+        Assert.Equal(10, ledgerEntry.Amount);
     }
 
     [Fact]

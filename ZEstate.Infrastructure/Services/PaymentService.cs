@@ -28,6 +28,22 @@ public class PaymentService : IPaymentService
         if (!Enum.TryParse<PaymentMethod>(dto.Method, true, out var method))
             throw new BadRequestException("Невалиден метод на плащане. Позволени стойности: Manual, Stripe.");
 
+        // Stripe money always lands in the bank account; a manually-recorded payment
+        // defaults to Cash unless the caller says it was actually a bank transfer.
+        CashAccountType account;
+        if (method == PaymentMethod.Stripe)
+        {
+            account = CashAccountType.Bank;
+        }
+        else if (string.IsNullOrWhiteSpace(dto.Account))
+        {
+            account = CashAccountType.Cash;
+        }
+        else if (!Enum.TryParse(dto.Account, true, out account))
+        {
+            throw new BadRequestException("Невалидна каса. Позволени стойности: Cash, Bank.");
+        }
+
         var apartment = await GetOwnedApartmentOrThrowAsync(userId, dto.ApartmentId);
 
         var outstandingObligations = await _context.Obligations
@@ -83,6 +99,15 @@ public class PaymentService : IPaymentService
             apartment.Budget += remaining;
             creditApplied = remaining;
         }
+
+        _context.CashLedgerEntries.Add(new CashLedgerEntry
+        {
+            BuildingId = apartment.BuildingId,
+            Account = account,
+            Amount = dto.Amount,
+            Description = $"Плащане, апартамент {apartment.Number}",
+            CreatedByUserId = userId
+        });
 
         await _context.SaveChangesAsync();
 
@@ -181,7 +206,10 @@ public class PaymentService : IPaymentService
         if (!completed.Metadata.TryGetValue("obligationId", out var obligationIdRaw) || !int.TryParse(obligationIdRaw, out var obligationId))
             return;
 
-        var obligation = await _context.Obligations.Include(o => o.Payments).FirstOrDefaultAsync(o => o.Id == obligationId);
+        var obligation = await _context.Obligations
+            .Include(o => o.Payments)
+            .Include(o => o.Apartment)
+            .FirstOrDefaultAsync(o => o.Id == obligationId);
 
         // Already paid (or gone) - nothing to do. Stripe may retry webhook delivery,
         // so this also makes the handler idempotent against duplicate events.
@@ -202,6 +230,15 @@ public class PaymentService : IPaymentService
         obligation.Status = (alreadyPaid + completed.AmountTotal) >= obligation.Amount
             ? ObligationStatus.Paid
             : ObligationStatus.PartiallyPaid;
+
+        // Card payments always land in the bank account, never physical cash.
+        _context.CashLedgerEntries.Add(new CashLedgerEntry
+        {
+            BuildingId = obligation.Apartment.BuildingId,
+            Account = CashAccountType.Bank,
+            Amount = completed.AmountTotal,
+            Description = $"Stripe плащане, апартамент {obligation.Apartment.Number}"
+        });
 
         await _context.SaveChangesAsync();
     }

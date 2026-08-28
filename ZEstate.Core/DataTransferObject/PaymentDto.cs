@@ -19,6 +19,11 @@ public class RegisterPaymentDto
     [Required]
     public string Method { get; set; } = "Manual";
 
+    // "Cash" | "Bank" - which till the money actually landed in. Only meaningful when
+    // Method is "Manual" (Stripe payments always land in "Bank" regardless of this);
+    // defaults to "Cash" when omitted.
+    public string? Account { get; set; }
+
     [MaxLength(300)]
     public string? Note { get; set; }
 }
