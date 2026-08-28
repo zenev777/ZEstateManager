@@ -304,6 +304,49 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task GetMeAsync_ActiveApartmentMembershipWithoutJoinRequest_ReturnsApproved()
+    {
+        // Mirrors data seeded directly (e.g. the QA fixture), which creates an
+        // active ApartmentUser without ever going through the join-request flow.
+        var (service, _, db, _) = CreateSut();
+        using var _db = db;
+
+        var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
+        var apartment = new Apartment { Building = building, Number = "5", Floor = 2, IdealParts = 20, Budget = 0 };
+        db.Context.Buildings.Add(building);
+        db.Context.Apartments.Add(apartment);
+        await db.Context.SaveChangesAsync();
+        db.Context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        await db.Context.SaveChangesAsync();
+
+        var result = await service.GetMeAsync("res1", isManager: false);
+
+        Assert.Equal("Resident", result.Role);
+        Assert.Equal("Approved", result.MembershipStatus);
+        Assert.Equal("B", result.BuildingName);
+        Assert.Equal("5", result.ApartmentNumber);
+    }
+
+    [Fact]
+    public async Task GetMeAsync_InactiveApartmentMembership_FallsBackToJoinRequestHistory()
+    {
+        var (service, _, db, _) = CreateSut();
+        using var _db = db;
+
+        var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
+        var apartment = new Apartment { Building = building, Number = "5", Floor = 2, IdealParts = 20, Budget = 0 };
+        db.Context.Buildings.Add(building);
+        db.Context.Apartments.Add(apartment);
+        await db.Context.SaveChangesAsync();
+        db.Context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = false });
+        await db.Context.SaveChangesAsync();
+
+        var result = await service.GetMeAsync("res1", isManager: false);
+
+        Assert.Equal("None", result.MembershipStatus);
+    }
+
+    [Fact]
     public async Task GetMeAsync_ResidentRejectedOnce_CanRetryIsTrue()
     {
         var (service, _, db, _) = CreateSut();

@@ -215,6 +215,26 @@ public class AuthService : IAuthService
         if (isManager)
             return new MeResponseDto { Role = "HouseManager" };
 
+        // An active apartment membership means the user is already a confirmed
+        // member, regardless of how it came to be - through the normal approved
+        // join-request flow, or seeded/added directly. Check this first rather than
+        // only trusting join-request history, which won't exist in the latter case.
+        var activeMembership = await _context.ApartmentUsers
+            .Where(au => au.UserId == userId && au.IsActive)
+            .Include(au => au.Apartment).ThenInclude(a => a.Building)
+            .FirstOrDefaultAsync();
+
+        if (activeMembership != null)
+        {
+            return new MeResponseDto
+            {
+                Role = "Resident",
+                MembershipStatus = "Approved",
+                BuildingName = activeMembership.Apartment.Building.Name,
+                ApartmentNumber = activeMembership.Apartment.Number
+            };
+        }
+
         var joinRequests = await _context.JoinRequests
             .Where(jr => jr.UserId == userId)
             .Include(jr => jr.Building)
