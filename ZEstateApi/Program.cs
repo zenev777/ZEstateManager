@@ -170,6 +170,30 @@ if (string.IsNullOrEmpty(renderPort))
     app.UseHttpsRedirection();
 }
 
+// Catches anything ApiExceptionFilter doesn't recognize (a genuine unhandled bug,
+// not one of our typed exceptions). Without this, an unhandled exception bubbles
+// past UseCors entirely and the resulting bare 500 has no CORS headers on it - the
+// browser then blocks reading the response and the frontend sees a generic network
+// failure ("Failed to fetch") instead of the real 500, making real bugs look like
+// connectivity issues. Must run before UseCors so the response it writes still
+// flows back out through the CORS middleware.
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        var feature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+        if (feature != null)
+        {
+            logger.LogError(feature.Error, "Unhandled exception on {Path}", context.Request.Path);
+        }
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { message = "Възникна грешка на сървъра. Опитай отново." });
+    });
+});
+
 app.UseCors(AngularClientCorsPolicy);
 
 app.UseAuthentication();
