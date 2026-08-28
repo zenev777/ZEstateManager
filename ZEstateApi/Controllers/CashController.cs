@@ -39,6 +39,18 @@ public class CashController : ControllerBase
     public async Task<IActionResult> GetHistory() =>
         Ok(await _cashService.GetHistoryAsync(CurrentUserId));
 
+    // POST: Теглене на пари за конкретен ремонт - отразява се като разход (ActualCost)
+    // по ремонта и намалява избраната каса.
+    [HttpPost("withdraw-for-repair")]
+    public async Task<IActionResult> WithdrawForRepair([FromBody] WithdrawForRepairDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        await _cashService.WithdrawForRepairAsync(CurrentUserId, dto);
+        return Ok(new { message = "Тегленето е записано." });
+    }
+
     private string CurrentUserId =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)!;
 }

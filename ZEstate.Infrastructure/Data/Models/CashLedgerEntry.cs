@@ -46,6 +46,12 @@ namespace ZEstate.Infrastructure.Data.Models
         [Comment("Links the two legs of one internal transfer between accounts")]
         public Guid? TransferGroupId { get; set; }
 
+        [Comment("The repair this withdrawal was made for, if any")]
+        public int? RepairId { get; set; }
+
+        [ForeignKey(nameof(RepairId))]
+        public Repair? Repair { get; set; }
+
         [Comment("Who recorded this entry (null for entries produced automatically, e.g. Stripe webhook)")]
         public string? CreatedByUserId { get; set; }
 

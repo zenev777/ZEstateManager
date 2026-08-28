@@ -67,6 +67,39 @@ public class CashService : ICashService
         await _context.SaveChangesAsync();
     }
 
+    public async Task WithdrawForRepairAsync(string userId, WithdrawForRepairDto dto)
+    {
+        var building = await GetManagedBuildingOrThrowAsync(userId);
+
+        if (!Enum.TryParse<CashAccountType>(dto.Account, true, out var account))
+            throw new BadRequestException("Невалидна каса. Позволени стойности: Cash, Bank.");
+
+        var repair = await _context.Repairs.FirstOrDefaultAsync(r => r.Id == dto.RepairId && r.BuildingId == building.Id);
+        if (repair == null)
+            throw new NotFoundException("Ремонтът не е намерен.");
+
+        var balances = await ComputeBalancesAsync(building.Id);
+        var balance = account == CashAccountType.Cash ? balances.CashBalance : balances.BankBalance;
+        if (dto.Amount > balance)
+            throw new BadRequestException("Няма достатъчно средства в избраната каса.");
+
+        var noteSuffix = string.IsNullOrWhiteSpace(dto.Note) ? "" : $" — {dto.Note.Trim()}";
+
+        _context.CashLedgerEntries.Add(new CashLedgerEntry
+        {
+            BuildingId = building.Id,
+            Account = account,
+            Amount = -dto.Amount,
+            Description = $"Теглене за ремонт: {repair.Title}{noteSuffix}",
+            RepairId = repair.Id,
+            CreatedByUserId = userId
+        });
+
+        repair.ActualCost = (repair.ActualCost ?? 0) + dto.Amount;
+
+        await _context.SaveChangesAsync();
+    }
+
     public async Task<List<CashLedgerEntryDto>> GetHistoryAsync(string userId)
     {
         var building = await GetManagedBuildingOrThrowAsync(userId);

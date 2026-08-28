@@ -32,3 +32,20 @@ public class CashLedgerEntryDto
     public string Description { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 }
+
+public class WithdrawForRepairDto
+{
+    // "Cash" | "Bank" - the account the money is withdrawn from
+    [Required]
+    public string Account { get; set; } = string.Empty;
+
+    [Required]
+    [Range(0.01, double.MaxValue)]
+    public decimal Amount { get; set; }
+
+    [Required]
+    public int RepairId { get; set; }
+
+    [MaxLength(300)]
+    public string? Note { get; set; }
+}
