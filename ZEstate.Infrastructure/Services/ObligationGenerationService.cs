@@ -10,11 +10,14 @@ public class ObligationGenerationService : IObligationGenerationService
 {
     private readonly ApplicationDbContext _context;
     private readonly ILogger<ObligationGenerationService> _logger;
+    private readonly INotificationService _notificationService;
 
-    public ObligationGenerationService(ApplicationDbContext context, ILogger<ObligationGenerationService> logger)
+    public ObligationGenerationService(
+        ApplicationDbContext context, ILogger<ObligationGenerationService> logger, INotificationService notificationService)
     {
         _context = context;
         _logger = logger;
+        _notificationService = notificationService;
     }
 
     public async Task<ObligationGenerationResult> GenerateForCurrentPeriodAsync()
@@ -30,6 +33,7 @@ public class ObligationGenerationService : IObligationGenerationService
 
         var created = 0;
         var skipped = 0;
+        var newObligations = new List<(int ApartmentId, string FeeTitle, decimal Amount, DateTime? DueDate)>();
 
         foreach (var fee in activeFees)
         {
@@ -71,6 +75,7 @@ public class ObligationGenerationService : IObligationGenerationService
                     Period = period
                 });
 
+                newObligations.Add((apartment.Id, fee.Title, amount, dueDate));
                 created++;
             }
         }
@@ -78,6 +83,7 @@ public class ObligationGenerationService : IObligationGenerationService
         if (created > 0)
         {
             await _context.SaveChangesAsync();
+            await NotifyResidentsAsync(newObligations);
         }
 
         _logger.LogInformation(
@@ -85,5 +91,34 @@ public class ObligationGenerationService : IObligationGenerationService
             currentPeriod, created, skipped);
 
         return new ObligationGenerationResult(created, skipped);
+    }
+
+    // Notifies every active resident of each apartment a new obligation was just
+    // generated for - one query for all involved apartments' active memberships,
+    // rather than per-obligation.
+    private async Task NotifyResidentsAsync(List<(int ApartmentId, string FeeTitle, decimal Amount, DateTime? DueDate)> newObligations)
+    {
+        var apartmentIds = newObligations.Select(o => o.ApartmentId).Distinct().ToList();
+        var usersByApartment = await _context.ApartmentUsers
+            .Where(au => apartmentIds.Contains(au.ApartmentId) && au.IsActive)
+            .ToListAsync();
+
+        var usersLookup = usersByApartment
+            .GroupBy(au => au.ApartmentId)
+            .ToDictionary(g => g.Key, g => g.Select(au => au.UserId).ToList());
+
+        foreach (var obligation in newObligations)
+        {
+            if (!usersLookup.TryGetValue(obligation.ApartmentId, out var userIds))
+                continue;
+
+            var dueText = obligation.DueDate.HasValue ? $", до {obligation.DueDate.Value:dd.MM.yyyy}" : "";
+            var message = $"Ново задължение: {obligation.FeeTitle}, {obligation.Amount:0.00} €{dueText}.";
+
+            foreach (var userId in userIds)
+            {
+                await _notificationService.NotifyAsync(userId, "Ново задължение", message, "/dashboard/fees");
+            }
+        }
     }
 }
