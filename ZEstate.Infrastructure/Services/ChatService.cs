@@ -1,7 +1,10 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using ZEstate.Core.DTOs.Chat;
 using ZEstate.Core.Exceptions;
 using ZEstate.Core.Interfaces;
+using ZEstate.Infrastructure.Data.DataConstants;
+using ZEstate.Infrastructure.Data.IdentityModels;
 using ZEstate.Infrastructure.Data.Models;
 
 namespace ZEstate.Infrastructure.Services;
@@ -10,11 +13,20 @@ public class ChatService : IChatService
 {
     private const int HistoryLimit = 50;
 
-    private readonly ApplicationDbContext _context;
+    // Precedence when a user holds more than one Identity role - the most
+    // "senior" role is what's shown next to their name in chat.
+    private static readonly string[] RolePrecedence =
+    {
+        RoleNames.HouseManager, RoleNames.Cashier, RoleNames.Administrator, RoleNames.Resident
+    };
 
-    public ChatService(ApplicationDbContext context)
+    private readonly ApplicationDbContext _context;
+    private readonly UserManager<ApplicationUser> _userManager;
+
+    public ChatService(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
     {
         _context = context;
+        _userManager = userManager;
     }
 
     public async Task<List<ChatMessageResponseDto>> GetMessagesAsync(string userId)
@@ -29,7 +41,20 @@ public class ChatService : IChatService
             .OrderBy(m => m.SentAt)
             .ToListAsync();
 
-        return messages.Select(ToDto).ToList();
+        var roleBySenderId = new Dictionary<string, string>();
+        var dtos = new List<ChatMessageResponseDto>();
+        foreach (var message in messages)
+        {
+            if (!roleBySenderId.TryGetValue(message.UserId, out var role))
+            {
+                role = await GetPrimaryRoleAsync(message.User);
+                roleBySenderId[message.UserId] = role;
+            }
+
+            dtos.Add(ToDto(message, role));
+        }
+
+        return dtos;
     }
 
     public async Task<ChatMessageSent> SendMessageAsync(string userId, string message)
@@ -56,7 +81,8 @@ public class ChatService : IChatService
             Message = chatMessage.Message,
             SentAt = chatMessage.SentAt,
             SenderId = userId,
-            SenderName = user.Name
+            SenderName = user.Name,
+            SenderRole = await GetPrimaryRoleAsync(user)
         };
 
         return new ChatMessageSent(dto, buildingId);
@@ -76,14 +102,21 @@ public class ChatService : IChatService
         return new ChatMessageDeleted(buildingId);
     }
 
-    private static ChatMessageResponseDto ToDto(ChatMessage m) => new()
+    private static ChatMessageResponseDto ToDto(ChatMessage m, string senderRole) => new()
     {
         Id = m.Id,
         Message = m.Message,
         SentAt = m.SentAt,
         SenderId = m.UserId,
-        SenderName = m.User.Name
+        SenderName = m.User.Name,
+        SenderRole = senderRole
     };
+
+    private async Task<string> GetPrimaryRoleAsync(ApplicationUser user)
+    {
+        var roles = await _userManager.GetRolesAsync(user);
+        return RolePrecedence.FirstOrDefault(roles.Contains) ?? string.Empty;
+    }
 
     private async Task<int> GetMyBuildingIdOrThrowAsync(string userId, string notFoundMessage)
     {
