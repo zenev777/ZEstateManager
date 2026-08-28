@@ -20,17 +20,20 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly ApplicationDbContext _context;
     private readonly IEmailSender _emailSender;
+    private readonly INotificationService _notificationService;
 
     public AuthService(
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
         ApplicationDbContext context,
-        IEmailSender emailSender)
+        IEmailSender emailSender,
+        INotificationService notificationService)
     {
         _userManager = userManager;
         _configuration = configuration;
         _context = context;
         _emailSender = emailSender;
+        _notificationService = notificationService;
     }
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
@@ -177,6 +180,15 @@ public class AuthService : IAuthService
             joinTargetBuilding.InviteCodeUseCount++;
 
             await _context.SaveChangesAsync();
+
+            if (joinTargetBuilding.ManagerId != null)
+            {
+                await _notificationService.NotifyAsync(
+                    joinTargetBuilding.ManagerId,
+                    "Нова заявка за присъединяване",
+                    $"{user.Name} подаде заявка за апартамент {apartment.Number} в {joinTargetBuilding.Name}.",
+                    "/dashboard");
+            }
         }
 
         var token = await GenerateJwtToken(user);
@@ -310,6 +322,16 @@ public class AuthService : IAuthService
         });
 
         await _context.SaveChangesAsync();
+
+        if (building.ManagerId != null)
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            await _notificationService.NotifyAsync(
+                building.ManagerId,
+                "Нова заявка за присъединяване",
+                $"{user?.Name ?? "Живущ"} подаде нова заявка за апартамент {apartment.Number} в {building.Name}.",
+                "/dashboard");
+        }
     }
 
     public async Task ForgotPasswordAsync(string email)
