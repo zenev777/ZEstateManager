@@ -19,4 +19,7 @@ public class MeResponseDto
     public string? ApartmentNumber { get; set; }
     public bool? CanRetry { get; set; }
     public string? RejectionReason { get; set; }
+
+    // Кредит, натрупан от надплащане (Apartment.Budget) - само при одобрено членство.
+    public decimal? ApartmentCredit { get; set; }
 }

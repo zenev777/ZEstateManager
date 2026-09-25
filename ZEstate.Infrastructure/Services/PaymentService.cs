@@ -46,14 +46,24 @@ public class PaymentService : IPaymentService
 
         var apartment = await GetOwnedApartmentOrThrowAsync(userId, dto.ApartmentId);
 
-        var outstandingObligations = await _context.Obligations
+        var outstandingQuery = _context.Obligations
             .Where(o => o.ApartmentId == apartment.Id
-                     && (o.Status == ObligationStatus.Pending || o.Status == ObligationStatus.PartiallyPaid))
+                     && (o.Status == ObligationStatus.Pending || o.Status == ObligationStatus.PartiallyPaid));
+
+        // Targeting one specific obligation instead of the default oldest-first
+        // allocation - still restricted to this apartment's own outstanding ones.
+        if (dto.ObligationId.HasValue)
+            outstandingQuery = outstandingQuery.Where(o => o.Id == dto.ObligationId.Value);
+
+        var outstandingObligations = await outstandingQuery
             .Include(o => o.Payments)
             .Include(o => o.Fee)
             .OrderBy(o => o.DueDate ?? DateTime.MaxValue)
             .ThenBy(o => o.DateCreated)
             .ToListAsync();
+
+        if (dto.ObligationId.HasValue && outstandingObligations.Count == 0)
+            throw new BadRequestException("Избраното задължение не е намерено или вече е платено.");
 
         var remaining = dto.Amount;
         var allocations = new List<PaymentAllocationDto>();

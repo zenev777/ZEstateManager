@@ -114,19 +114,27 @@ public class FeeService : IFeeService
             .Where(o => o.Apartment.BuildingId == building.Id)
             .Include(o => o.Apartment)
             .Include(o => o.Fee)
+            .Include(o => o.Payments)
             .OrderByDescending(o => o.DateCreated)
             .ToListAsync();
 
-        return obligations.Select(o => new ObligationSummaryDto
+        return obligations.Select(o =>
         {
-            Id = o.Id,
-            ApartmentNumber = o.Apartment.Number,
-            FeeTitle = o.Fee.Title,
-            Amount = o.Amount,
-            Status = (int)o.Status,
-            Period = o.Period,
-            DueDate = o.DueDate,
-            DateCreated = o.DateCreated
+            var amountPaid = o.Payments.Sum(p => p.Amount);
+            return new ObligationSummaryDto
+            {
+                Id = o.Id,
+                ApartmentId = o.ApartmentId,
+                ApartmentNumber = o.Apartment.Number,
+                FeeTitle = o.Fee.Title,
+                Amount = o.Amount,
+                AmountPaid = amountPaid,
+                Remaining = Math.Max(0, o.Amount - amountPaid),
+                Status = (int)o.Status,
+                Period = o.Period,
+                DueDate = o.DueDate,
+                DateCreated = o.DateCreated
+            };
         }).ToList();
     }
 
@@ -169,19 +177,27 @@ public class FeeService : IFeeService
             .Where(o => o.ApartmentId == apartmentId.Value)
             .Include(o => o.Apartment)
             .Include(o => o.Fee)
+            .Include(o => o.Payments)
             .OrderByDescending(o => o.DateCreated)
             .ToListAsync();
 
-        return obligations.Select(o => new ObligationSummaryDto
+        return obligations.Select(o =>
         {
-            Id = o.Id,
-            ApartmentNumber = o.Apartment.Number,
-            FeeTitle = o.Fee.Title,
-            Amount = o.Amount,
-            Status = (int)o.Status,
-            Period = o.Period,
-            DueDate = o.DueDate,
-            DateCreated = o.DateCreated
+            var amountPaid = o.Payments.Sum(p => p.Amount);
+            return new ObligationSummaryDto
+            {
+                Id = o.Id,
+                ApartmentId = o.ApartmentId,
+                ApartmentNumber = o.Apartment.Number,
+                FeeTitle = o.Fee.Title,
+                Amount = o.Amount,
+                AmountPaid = amountPaid,
+                Remaining = Math.Max(0, o.Amount - amountPaid),
+                Status = (int)o.Status,
+                Period = o.Period,
+                DueDate = o.DueDate,
+                DateCreated = o.DateCreated
+            };
         }).ToList();
     }
 

@@ -208,6 +208,30 @@ public class FeeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetMyObligationsAsync_PartiallyPaid_RemainingExcludesAlreadyPaidAmount()
+    {
+        var building = AddManagedBuilding();
+        var apartment = new Apartment { BuildingId = building.Id, Number = "1", Floor = 1, IdealParts = 10, Budget = 0 };
+        _context.Apartments.Add(apartment);
+        var fee = new Fee { BuildingId = building.Id, Title = "Maintenance", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+
+        _context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        var obligation = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.PartiallyPaid };
+        _context.Obligations.Add(obligation);
+        await _context.SaveChangesAsync();
+
+        _context.Payments.Add(new Payment { ObligationId = obligation.Id, Amount = 4, PaidAt = DateTime.UtcNow, Method = PaymentMethod.Manual });
+        await _context.SaveChangesAsync();
+
+        var result = await _service.GetMyObligationsAsync("res1");
+
+        Assert.Equal(4, result[0].AmountPaid);
+        Assert.Equal(6, result[0].Remaining);
+    }
+
+    [Fact]
     public async Task GetMyObligationsAsync_InactiveMembership_ReturnsEmptyList()
     {
         var building = AddManagedBuilding();

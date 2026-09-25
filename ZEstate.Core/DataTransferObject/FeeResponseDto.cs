@@ -21,9 +21,15 @@ public class FeeResponseDto
 public class ObligationSummaryDto
 {
     public int Id { get; set; }
+    public int ApartmentId { get; set; }
     public string ApartmentNumber { get; set; } = string.Empty;
     public string FeeTitle { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+
+    // Sum of payments already applied to this obligation, and what's left to pay -
+    // Amount alone overstates the due amount once an obligation is PartiallyPaid.
+    public decimal AmountPaid { get; set; }
+    public decimal Remaining { get; set; }
     public int Status { get; set; }
     public DateTime? Period { get; set; }
     public DateTime? DueDate { get; set; }

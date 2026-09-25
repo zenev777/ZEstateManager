@@ -243,7 +243,8 @@ public class AuthService : IAuthService
                 Role = "Resident",
                 MembershipStatus = "Approved",
                 BuildingName = activeMembership.Apartment.Building.Name,
-                ApartmentNumber = activeMembership.Apartment.Number
+                ApartmentNumber = activeMembership.Apartment.Number,
+                ApartmentCredit = activeMembership.Apartment.Budget
             };
         }
 
