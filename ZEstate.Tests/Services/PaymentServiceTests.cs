@@ -81,6 +81,49 @@ public class PaymentServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RegisterPaymentAsync_WithObligationId_TargetsOnlyThatObligation()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        var fee = new Fee { BuildingId = building.Id, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+
+        // Older obligation would normally be paid first by FIFO - targeting the
+        // newer one explicitly must skip it instead.
+        var older = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 30, Status = ObligationStatus.Pending, DueDate = DateTime.UtcNow.AddDays(-5) };
+        var urgent = new Obligation { ApartmentId = apartment.Id, FeeId = fee.Id, Amount = 20, Status = ObligationStatus.Pending, DueDate = DateTime.UtcNow.AddDays(5) };
+        _context.Obligations.AddRange(older, urgent);
+        await _context.SaveChangesAsync();
+
+        var dto = new RegisterPaymentDto { ApartmentId = apartment.Id, ObligationId = urgent.Id, Amount = 20, PaidAt = DateTime.UtcNow, Method = "Manual" };
+        var result = await _service.RegisterPaymentAsync(ManagerId, dto);
+
+        Assert.Single(result.Allocations);
+        Assert.Equal(urgent.Id, result.Allocations[0].Id);
+        Assert.Equal(ObligationStatus.Paid, _context.Obligations.Single(o => o.Id == urgent.Id).Status);
+        Assert.Equal(ObligationStatus.Pending, _context.Obligations.Single(o => o.Id == older.Id).Status);
+    }
+
+    [Fact]
+    public async Task RegisterPaymentAsync_ObligationIdNotOwnedByApartment_ThrowsBadRequest()
+    {
+        var (building, apartment) = AddManagedBuildingWithApartment();
+        var otherApartment = new Apartment { Building = building, Number = "2", Floor = 1, IdealParts = 10, Budget = 0 };
+        _context.Apartments.Add(otherApartment);
+        var fee = new Fee { BuildingId = building.Id, Title = "F", Amount = 10, Type = FeeType.Fixed, Frequency = FeeFrequency.Monthly, DateFrom = DateTime.UtcNow };
+        _context.Fees.Add(fee);
+        await _context.SaveChangesAsync();
+
+        var foreignObligation = new Obligation { ApartmentId = otherApartment.Id, FeeId = fee.Id, Amount = 10, Status = ObligationStatus.Pending };
+        _context.Obligations.Add(foreignObligation);
+        await _context.SaveChangesAsync();
+
+        var dto = new RegisterPaymentDto { ApartmentId = apartment.Id, ObligationId = foreignObligation.Id, Amount = 10, PaidAt = DateTime.UtcNow, Method = "Manual" };
+
+        await Assert.ThrowsAsync<BadRequestException>(() => _service.RegisterPaymentAsync(ManagerId, dto));
+    }
+
+    [Fact]
     public async Task RegisterPaymentAsync_ManualWithBankAccount_CreatesBankLedgerEntry()
     {
         var (_, apartment) = AddManagedBuildingWithApartment();

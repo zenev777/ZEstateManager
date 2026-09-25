@@ -331,6 +331,25 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task GetMeAsync_ApprovedMembership_ReturnsApartmentCreditFromBudget()
+    {
+        var (service, _, db, _, _) = CreateSut();
+        using var _db = db;
+
+        var building = new Building { Name = "B", Address = "A", InviteCode = "C1" };
+        var apartment = new Apartment { Building = building, Number = "5", Floor = 2, IdealParts = 20, Budget = 7.5m };
+        db.Context.Buildings.Add(building);
+        db.Context.Apartments.Add(apartment);
+        await db.Context.SaveChangesAsync();
+        db.Context.ApartmentUsers.Add(new ApartmentUser { ApartmentId = apartment.Id, UserId = "res1", IsActive = true });
+        await db.Context.SaveChangesAsync();
+
+        var result = await service.GetMeAsync("res1", isManager: false);
+
+        Assert.Equal(7.5m, result.ApartmentCredit);
+    }
+
+    [Fact]
     public async Task GetMeAsync_InactiveApartmentMembership_FallsBackToJoinRequestHistory()
     {
         var (service, _, db, _, _) = CreateSut();

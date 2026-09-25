@@ -8,6 +8,10 @@ public class RegisterPaymentDto
     [Required]
     public int ApartmentId { get; set; }
 
+    // Optional - targets one specific obligation instead of the default FIFO
+    // allocation (oldest-due-first) across all of the apartment's outstanding ones.
+    public int? ObligationId { get; set; }
+
     [Required]
     [Range(0.01, double.MaxValue)]
     public decimal Amount { get; set; }
